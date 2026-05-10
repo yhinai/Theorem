@@ -125,7 +125,7 @@ GRIDS: dict[str, GridSpec] = {
         name="chunk_fwd_h",
         grid={
             "num_warps": [4, 8, 16],
-            "num_stages": [1, 2, 3, 4],
+            "num_stages": [1, 2, 3, 4, 5, 6, 7, 8],   # extended: deeper LDS pipeline
             "matrix_instr_nonkdim": [0, 16, 32],
         },
         apply_fn=apply_chunk_fwd_h,
@@ -134,7 +134,7 @@ GRIDS: dict[str, GridSpec] = {
         name="chunk_fwd_o",
         grid={
             "num_warps": [4, 8, 16],
-            "num_stages": [1, 2, 3],
+            "num_stages": [1, 2, 3, 4, 5, 6, 7, 8],   # extended
             "matrix_instr_nonkdim": [0, 16, 32],
         },
         apply_fn=apply_chunk_fwd_o,
@@ -143,7 +143,7 @@ GRIDS: dict[str, GridSpec] = {
         name="recompute_w_u",
         grid={
             "num_warps": [4, 8, 16],
-            "num_stages": [1, 2, 3],
+            "num_stages": [1, 2, 3, 4, 5, 6, 7, 8],   # extended
             "GROUP_SIZE": [4, 8, 16],
             "matrix_instr_nonkdim": [0, 16, 32],
         },

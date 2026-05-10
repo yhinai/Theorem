@@ -1,0 +1,13 @@
+kernel,shape,best_us,best_config
+causal_conv1d,"B=1, D=1536, S=2048, W=4, seed=2146",25.297,"{""BLOCK_S"": 128, ""BLOCK_D"": 16, ""num_warps"": 16, ""num_stages"": 1}"
+causal_conv1d,"B=1, D=2560, S=2048, W=4, seed=3129",29.587,"{""BLOCK_S"": 128, ""BLOCK_D"": 16, ""num_warps"": 16, ""num_stages"": 1}"
+causal_conv1d,"B=1, D=2560, S=4096, W=4, seed=54352",46.746,"{""BLOCK_S"": 64, ""BLOCK_D"": 16, ""num_warps"": 8, ""num_stages"": 3}"
+chunk_fwd_h,"B=1, T=64, H=1, K=64, V=64, seed=31232",29.628,"{""num_warps"": 8, ""num_stages"": 2, ""matrix_instr_nonkdim"": 0}"
+chunk_fwd_h,"B=2, T=512, H=3, K=64, V=64, seed=4052",36.844,"{""num_warps"": 4, ""num_stages"": 4, ""matrix_instr_nonkdim"": 0}"
+chunk_fwd_h,"B=2, T=1024, H=3, K=64, V=64, seed=2146",51.517,"{""num_warps"": 16, ""num_stages"": 6, ""matrix_instr_nonkdim"": 16}"
+chunk_fwd_o,"B=1, T=64, H=1, K=64, V=64, seed=31232",36.162,"{""BT"": 64, ""BV"": 64, ""num_warps"": 4, ""num_stages"": 3, ""matrix_instr_nonkdim"": 0}"
+chunk_fwd_o,"B=2, T=512, H=3, K=64, V=64, seed=4052",35.361,"{""num_warps"": 4, ""num_stages"": 4, ""matrix_instr_nonkdim"": 16}"
+chunk_fwd_o,"B=2, T=1024, H=3, K=64, V=64, seed=2146",33.998,"{""num_warps"": 4, ""num_stages"": 7, ""matrix_instr_nonkdim"": 16}"
+recompute_w_u,"B=1, T=64, H=1, K=64, V=64, seed=31232",22.371,"{""num_warps"": 4, ""num_stages"": 6, ""GROUP_SIZE"": 16, ""matrix_instr_nonkdim"": 32}"
+recompute_w_u,"B=2, T=512, H=3, K=64, V=64, seed=4052",36.483,"{""num_warps"": 8, ""num_stages"": 2, ""GROUP_SIZE"": 8, ""matrix_instr_nonkdim"": 16}"
+recompute_w_u,"B=2, T=1024, H=3, K=64, V=64, seed=2146",39.730,"{""num_warps"": 4, ""num_stages"": 1, ""GROUP_SIZE"": 4, ""matrix_instr_nonkdim"": 16}"

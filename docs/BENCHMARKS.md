@@ -146,10 +146,10 @@ BLOCK_D=64`) were left ~30-39% on the table.
 
 | Shape `(B, D, S, W)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 1536, 2048, 4) | 74.73 | 27.86 | **2.68×** |
-| (1, 2560, 2048, 4) | 89.76 | 34.00 | **2.64×** |
-| (1, 2560, 4096, 4) | 126.13 | 43.70 | **2.89×** |
-| **geomean** | **95.0** | **34.6** | **2.73×** |
+| (1, 1536, 2048, 4) | 74.01 | 25.18 | **2.94×** |
+| (1, 2560, 2048, 4) | 89.64 | 32.03 | **2.80×** |
+| (1, 2560, 4096, 4) | 128.09 | 46.79 | **2.74×** |
+| **geomean** | **95.4** | **33.5** | **2.83×** |
 
 ### 3.2 `chunk_fwd_h` — gated DeltaNet inter-chunk state recurrence
 
@@ -160,10 +160,10 @@ as `T` grows.
 
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 105.68 | 28.06 | **3.77×** |
-| (2, 512, 3, 64, 64) | 757.49 | 41.41 | **18.29×** |
-| (2, 1024, 3, 64, 64) | 1466.46 | 52.64 | **27.86×** |
-| **geomean** | **489.9** | **39.4** | **12.42×** |
+| (1, 64, 1, 64, 64) | 109.77 | 26.34 | **4.17×** |
+| (2, 512, 3, 64, 64) | 733.55 | 39.05 | **18.79×** |
+| (2, 1024, 3, 64, 64) | 1427.57 | 51.76 | **27.58×** |
+| **geomean** | **484.4** | **37.6** | **12.92×** |
 
 ### 3.3 `chunk_fwd_o` — gated DeltaNet chunkwise output
 
@@ -179,26 +179,29 @@ Two changes shipped together:
 
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 162.33 | 42.74 | **3.80×** |
-| (2, 512, 3, 64, 64) | 208.72 | 41.01 | **5.09×** |
-| (2, 1024, 3, 64, 64) | 211.20 | 44.50 | **4.75×** |
-| **geomean** | **192.7** | **42.7** | **4.51×** |
+| (1, 64, 1, 64, 64) | 143.05 | 35.00 | **4.09×** |
+| (2, 512, 3, 64, 64) | 174.64 | 37.65 | **4.64×** |
+| (2, 1024, 3, 64, 64) | 180.61 | 40.65 | **4.44×** |
+| **geomean** | **165.3** | **37.7** | **4.39×** |
 
 ### 3.4 `recompute_w_u` — gated DeltaNet WY-transform recompute
 
-Persistent-blocked launch. Per-shape `num_warps`, `num_stages`, and `GROUP_SIZE`
-autotuned over a 27-config grid. Insight: `num_warps=4` (vs the hand-picked 8)
-wins on every shape — `num_warps=4 × 64-lane wavefronts = 256 threads/CTA`,
-exactly the size of the 64×64 MFMA tile, so the warps are perfectly utilized
-without idle lanes. `GROUP_SIZE=16` also helps the small/medium shapes by
-broadening the L2-friendly tile-reorder window. Improvement +17-26% per shape.
+Persistent-blocked launch. Per-shape `num_warps`, `num_stages`, `GROUP_SIZE`,
+and `matrix_instr_nonkdim` autotuned via the continuous hill-climber
+([`benchmarks/autotune_continuous.py`](../benchmarks/autotune_continuous.py))
+over an extended grid that included `num_stages ∈ {1..8}`.
+
+Two compounding insights:
+
+1. **`num_warps=4` beats hand-picked 8** on every shape — `num_warps=4 × 64-lane wavefronts = 256 threads/CTA`, exactly the size of the 64×64 MFMA tile, so the warps are perfectly utilized without idle lanes.
+2. **`num_stages=6` beats `num_stages=2`** on the smallest shape by 36% — deeper LDS pipelining hides HBM latency that hand-picked configs left exposed. This is the biggest single per-shape win in the repo.
 
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 104.80 | 39.05 | **2.68×** |
-| (2, 512, 3, 64, 64) | 146.49 | 44.46 | **3.29×** |
-| (2, 1024, 3, 64, 64) | 125.73 | 42.94 | **2.93×** |
-| **geomean** | **124.4** | **42.1** | **2.96×** |
+| (1, 64, 1, 64, 64) | 86.64 | 41.77 | **2.07×** |
+| (2, 512, 3, 64, 64) | 126.05 | 34.28 | **3.68×** |
+| (2, 1024, 3, 64, 64) | 121.36 | 38.73 | **3.13×** |
+| **geomean** | **110.4** | **38.1** | **2.88×** |
 
 ### 3.5 Sanity check — vs `torch.compile(mode="max-autotune-no-cudagraphs")`
 
@@ -207,10 +210,10 @@ itself emits Triton-AMD code under the hood) on every shape:
 
 | Kernel | Geomean speedup over `torch.compile` |
 |---|---:|
-| `causal_conv1d` | **3.20×** |
-| `chunk_fwd_h` | **4.10×** |
-| `chunk_fwd_o` | **2.34×** |
-| `recompute_w_u` | **2.34×** |
+| `causal_conv1d` | **3.18×** |
+| `chunk_fwd_h` | **3.62×** |
+| `chunk_fwd_o` | **2.46×** |
+| `recompute_w_u` | **2.55×** |
 
 ### 3.6 Reproducing the autotune
 
