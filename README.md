@@ -4,7 +4,7 @@
 
 ### Triton kernels for Mamba-2 and gated DeltaNet on AMD MI300X
 
-Autotune-swept on real CDNA3 silicon. **2.7–12.4×** over PyTorch eager, **2.3–4.1×** over `torch.compile`.
+Autotune-swept on real CDNA3 silicon. **2.8–12.8×** over PyTorch eager, **2.4–3.6×** over `torch.compile`.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GPU](https://img.shields.io/badge/AMD%20MI300X-CDNA3%20%C2%B7%20gfx942-ED1C24.svg)](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html)
@@ -83,15 +83,15 @@ Wait ~30 seconds. The output ends with the markdown table — **this is the slid
 
 ```
 | kernel        | shape                    | triton_us | eager_us | compiled_us | speedup_vs_eager |
-| causal_conv1d | B=1,D=2560,S=4096,W=4    |     46.79 |   128.09 |      147.58 |          2.74×   |
-| chunk_fwd_h   | B=2,T=1024,H=3,K=64,V=64 |     51.76 |  1427.57 |      417.67 |         27.58×   |
-| chunk_fwd_o   | B=2,T=512,H=3,K=64,V=64  |     37.65 |   174.64 |      108.33 |          4.64×   |
-| recompute_w_u | B=2,T=512,H=3,K=64,V=64  |     34.28 |   126.05 |      128.73 |          3.68×   |
+| causal_conv1d | B=1,D=2560,S=4096,W=4    |     46.83 |   129.18 |      157.16 |          2.76×   |
+| chunk_fwd_h   | B=2,T=1024,H=3,K=64,V=64 |     49.11 |  1427.21 |      419.92 |         29.06×   |
+| chunk_fwd_o   | B=2,T=512,H=3,K=64,V=64  |     42.54 |   183.18 |      123.92 |          4.31×   |
+| recompute_w_u | B=2,T=512,H=3,K=64,V=64  |     38.93 |   124.32 |      124.80 |          3.19×   |
 ```
 
 **5. Point at the table.** Land the close on `chunk_fwd_h`:
 
-> *"DeltaNet inter-chunk recurrence. PyTorch eager: 1.4 milliseconds. Our Triton kernel: 51 microseconds. **27× faster.** And it beats `torch.compile` — PyTorch's own auto-compiled path — by 3.4× too. Every kernel beats `torch.compile`, by 1.6 to 4×, depending on the shape. That's because we autotuned on real CDNA3 silicon instead of porting NVIDIA-shaped intuitions."*
+> *"DeltaNet inter-chunk recurrence. PyTorch eager: 1.4 milliseconds. Our Triton kernel: 49 microseconds. **29× faster.** And it beats `torch.compile` — PyTorch's own auto-compiled path — by 8.5× too. Every kernel beats `torch.compile`, by 1.3 to 8.5×, depending on the shape. That's because we autotuned on real CDNA3 silicon instead of porting NVIDIA-shaped intuitions."*
 
 ### Window 2 (optional, opened before step 4) — live GPU monitor
 
@@ -294,10 +294,10 @@ Expected output: four `PASS` lines and a one-line GPU banner. If `setup_env.sh` 
 
 | Kernel | What it does | Reference (µs) | Optimized (µs) | Speedup |
 |---|---|---:|---:|---:|
-| `causal_conv1d` | Depthwise 1-D causal convolution (Mamba / Mamba-2 local mixer). Memory-bound; small `(64×16)` tiles win because they expose more programs across the 304 CUs than fewer big tiles do. | 95.0 | 34.6 | **2.73×** |
-| `chunk_fwd_h` | Gated DeltaNet inter-chunk recurrence `S_{c+1} = G_c·S_c + K_cᵀ·V_c`. State pinned in registers across the chunk loop; `tl.dot` mapped to Matrix Cores. | 489.9 | 39.4 | **12.42×** |
-| `chunk_fwd_o` | Gated DeltaNet chunkwise output (local causal attention + global state). Biggest single tuning win: `num_warps=16→4` + `matrix_instr_nonkdim=16` picks the 16×16×4 fp32 MFMA shape matching the 64×64 chunk geometry. | 192.7 | 42.7 | **4.51×** |
-| `recompute_w_u` | Gated DeltaNet WY-transform recompute (two GEMMs per chunk). Persistent-blocked launch, L2 reordering, autotuned `num_warps=4`: 4 × 64-lane wavefronts = 256 threads/CTA — exactly right for the 64×64 MFMA tile. | 124.4 | 42.1 | **2.96×** |
+| `causal_conv1d` | Depthwise 1-D causal convolution (Mamba / Mamba-2 local mixer). Memory-bound; small `(64×16)` tiles win because they expose more programs across the 304 CUs than fewer big tiles do. | 93.6 | 33.7 | **2.79×** |
+| `chunk_fwd_h` | Gated DeltaNet inter-chunk recurrence `S_{c+1} = G_c·S_c + K_cᵀ·V_c`. State pinned in registers across the chunk loop; `tl.dot` mapped to Matrix Cores. | 481.4 | 37.5 | **12.83×** |
+| `chunk_fwd_o` | Gated DeltaNet chunkwise output (local causal attention + global state). Biggest single tuning win: `num_warps=16→4` + `matrix_instr_nonkdim=16` picks the 16×16×4 fp32 MFMA shape matching the 64×64 chunk geometry. | 167.9 | 37.2 | **4.52×** |
+| `recompute_w_u` | Gated DeltaNet WY-transform recompute (two GEMMs per chunk). Persistent-blocked launch, L2 reordering, autotuned `num_warps=4`: 4 × 64-lane wavefronts = 256 threads/CTA — exactly right for the 64×64 MFMA tile. | 108.7 | 39.1 | **2.78×** |
 
 Full per-shape tables with min / p50 / mean and the comparison against `torch.compile`: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
 
