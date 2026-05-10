@@ -33,3 +33,4 @@ dist/
 /*.csv
 results/*
 !results/.gitkeep
+.omc/
