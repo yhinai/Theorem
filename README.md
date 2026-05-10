@@ -241,7 +241,38 @@ tensor([[ 0.142,  0.318, -0.077],
         [ 0.103,  0.359, -0.158]])
 ```
 
-That's the whole inference path: take 3 input vectors → multiply by 16-parameter `Linear(3 → 4)` → ReLU → multiply by 15-parameter `Linear(4 → 3)` → done. Three forward passes through 31 numbers, total work measured in nanoseconds.
+### Every computation, one by one
+
+Per token `x = [x₀, x₁, x₂]`, every arithmetic op that PyTorch actually executes:
+
+**Layer 1 — `Linear(3 → 4)` + `ReLU`** (per token)
+
+```
+hidden[0] = W1[0,0]·x₀ + W1[0,1]·x₁ + W1[0,2]·x₂ + b1[0]      3 mul, 3 add
+hidden[1] = W1[1,0]·x₀ + W1[1,1]·x₁ + W1[1,2]·x₂ + b1[1]      3 mul, 3 add
+hidden[2] = W1[2,0]·x₀ + W1[2,1]·x₁ + W1[2,2]·x₂ + b1[2]      3 mul, 3 add
+hidden[3] = W1[3,0]·x₀ + W1[3,1]·x₁ + W1[3,2]·x₂ + b1[3]      3 mul, 3 add
+a[0..3]   = max(0, hidden[0..3])                                4 max  (ReLU)
+```
+
+**Layer 2 — `Linear(4 → 3)`** (per token)
+
+```
+out[0] = W2[0,0]·a₀ + W2[0,1]·a₁ + W2[0,2]·a₂ + W2[0,3]·a₃ + b2[0]    4 mul, 4 add
+out[1] = W2[1,0]·a₀ + W2[1,1]·a₁ + W2[1,2]·a₂ + W2[1,3]·a₃ + b2[1]    4 mul, 4 add
+out[2] = W2[2,0]·a₀ + W2[2,1]·a₁ + W2[2,2]·a₂ + W2[2,3]·a₃ + b2[2]    4 mul, 4 add
+```
+
+**Op count totals**
+
+| Phase | Multiplies | Additions | ReLU | Total |
+|---|---:|---:|---:|---:|
+| Layer 1 (per token) | 12 | 12 | 4 | 28 |
+| Layer 2 (per token) | 12 | 12 | 0 | 24 |
+| **Per token** | **24** | **24** | **4** | **52** |
+| **3 tokens** | **72** | **72** | **12** | **156** |
+
+That's **156 elementary floating-point operations** for one full inference pass over 3 tokens. On an MI300X at 2.1 GHz the GPU finishes that in roughly **75 nanoseconds** of compute — kernel launch overhead dwarfs the actual math by 1000×.
 
 ### How this scales up to the kernels in this repo
 
