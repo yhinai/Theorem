@@ -46,20 +46,25 @@ speedup is across the kernel's three benchmark shapes (full per-shape table in
 
 | Kernel | Math (sketch) | CDNA3-aware optimization | Reference (µs, geomean) | Optimized (µs, geomean) | Speedup |
 | --- | --- | --- | ---: | ---: | ---: |
-| `causal_conv1d` | Depthwise 1D causal convolution `y[t,c] = Σ_k w[k,c] · x[t-k,c]` (used in Mamba / Mamba-2-style architectures). | Block sized to whole 64-lane wavefronts; **autotuned `BLOCK_S × BLOCK_D` per shape** — small (64×16) tiles win because they expose more programs across the 304 CUs than fewer big tiles do for this memory-bound op. | 96.1 | 39.4 | **2.41×** |
-| `gated_deltanet_chunk_fwd_h` | Inter-chunk recurrence `S_{c+1} = G_c · S_c + K_cᵀ V_c` over fixed-size chunks (gated DeltaNet, arXiv:2412.06464). | State `S` pinned in registers across the chunk-step loop; `tl.dot` mapped to Matrix Cores; per-shape `num_warps`/`num_stages` autotuned. | 480.6 | 40.1 | **12.52×** |
-| `gated_deltanet_chunk_fwd_o` | Chunkwise output `O_c = (Q_c K_cᵀ ⊙ M) V_c + Q_c S_c` (local causal attention plus global state read). | Two `tl.dot` blocks share one Q tile in registers; causal mask materialized at compile time per `BT`; state read coalesced from HBM3e through LDS. | 172.3 | 61.7 | **2.80×** |
-| `gated_deltanet_recompute_w_u` | Recomputes the WY-transform helpers `W = β · (I − tril(K Kᵀ)·β)⁻¹` and `U` used by the backward pass. | Two `tl.dot` matmuls per chunk; persistent-blocked program scheduling; L2 reordering; **autotuned `num_warps` / `num_stages` / `GROUP_SIZE` per shape** — `num_warps=4` (vs the hand-picked 8) wins on every shape. | 119.7 | 35.1 | **3.40×** |
+| `causal_conv1d` | Depthwise 1D causal convolution `y[t,c] = Σ_k w[k,c] · x[t-k,c]` (used in Mamba / Mamba-2-style architectures). | Block sized to whole 64-lane wavefronts; **autotuned `BLOCK_S × BLOCK_D` per shape** — small (64×16) tiles win because they expose more programs across the 304 CUs than fewer big tiles do for this memory-bound op. | 95.0 | 34.6 | **2.73×** |
+| `gated_deltanet_chunk_fwd_h` | Inter-chunk recurrence `S_{c+1} = G_c · S_c + K_cᵀ V_c` over fixed-size chunks (gated DeltaNet, arXiv:2412.06464). | State `S` pinned in registers across the chunk-step loop; `tl.dot` mapped to Matrix Cores; per-shape `num_warps` / `num_stages` / `matrix_instr_nonkdim` autotuned. | 489.9 | 39.4 | **12.42×** |
+| `gated_deltanet_chunk_fwd_o` | Chunkwise output `O_c = (Q_c K_cᵀ ⊙ M) V_c + Q_c S_c` (local causal attention plus global state read). | Two `tl.dot` blocks share one Q tile in registers; causal mask materialized at compile time; **autotuned MFMA tile via `matrix_instr_nonkdim=16`** — picks 16×16×4 fp32 MFMA over 32×32×2 because the 16-lane M/N-dim better matches the 64×64 chunk geometry. The biggest single tuning win in the repo (+47% on the larger shapes). | 192.7 | 42.7 | **4.51×** |
+| `gated_deltanet_recompute_w_u` | Recomputes the WY-transform helpers `W = β · (I − tril(K Kᵀ)·β)⁻¹` and `U` used by the backward pass. | Two `tl.dot` matmuls per chunk; persistent-blocked program scheduling; L2 reordering; **autotuned `num_warps` / `num_stages` / `GROUP_SIZE` / `matrix_instr_nonkdim` per shape** — `num_warps=4` (vs the hand-picked 8) wins on every shape. | 124.4 | 42.1 | **2.96×** |
 
 The Triton kernels also outperform `torch.compile(mode="max-autotune-no-cudagraphs")`
-on every shape — by **1.57× to 4.27×** geomean (full data:
+on every shape — by **2.34× to 4.10×** geomean (full data:
 [`results/baseline_compare.csv`](results/baseline_compare.csv),
 [`results/autotune_summary.csv`](results/autotune_summary.csv)).
 
 > Configs were swept via `python benchmarks/autotune.py --kernels all --mode bench`
-> on the MI300X. Biggest wins:
+> on the MI300X. Biggest wins, ordered:
+> - `chunk_fwd_o`: +47% on the larger shapes (`num_warps=16 → 4` + `matrix_instr_nonkdim=16`)
 > - `causal_conv1d`: +30-39% per shape (small tiles beat big tiles for memory-bound ops on 304 CUs)
 > - `recompute_w_u`: +17-26% per shape (`num_warps=4 × 64-lane wavefronts = 256` threads/CTA, exactly right for the 64×64 MFMA tile)
+>
+> Two optimizations were attempted and **didn't ship**:
+> 1. **Fused `chunk_fwd_h + chunk_fwd_o`** (kept in branch history). Faster on the smallest shape (1.65×) but slower on the larger ones — the unfused pair has 16-32× more parallelism (`B·H·NT·V/BV` programs) than a fused per-(B,H) loop can match on 304 CUs. The HBM saving on `h` (~6 MB) didn't beat the parallelism loss.
+> 2. **LDS-staged `causal_conv1d`** (load full input tile once, reuse across W taps). Triton 3.1 on AMD couldn't slice a wide tile per-`j` without a `tl.where` workaround that added more ALU work than the HBM saving recovered. Reverted.
 
 ---
 

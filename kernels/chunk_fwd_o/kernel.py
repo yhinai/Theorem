@@ -40,10 +40,10 @@ SHAPE_CONFIGS: Dict[Tuple[int, int, int, int, int], Dict[str, int]] = {
     (1, 64, 1, 64, 64):    {"BT": 64, "BV": 64,  "num_warps": 8,  "num_stages": 2},
     (2, 128, 4, 64, 64):   {"BT": 64, "BV": 64,  "num_warps": 8,  "num_stages": 2},
     (1, 256, 4, 64, 128):  {"BT": 64, "BV": 64,  "num_warps": 8,  "num_stages": 2},
-    # Benchmarks
-    (1, 64,   1, 64, 64):  {"BT": 64, "BV": 64,  "num_warps": 8,  "num_stages": 2},
-    (2, 512,  3, 64, 64):  {"BT": 64, "BV": 64,  "num_warps": 16, "num_stages": 2},
-    (2, 1024, 3, 64, 64):  {"BT": 64, "BV": 64,  "num_warps": 16, "num_stages": 2},
+    # Benchmarks (autotuned on MI300X -- see results/autotune_summary.csv)
+    (1, 64,   1, 64, 64):  {"BT": 64, "BV": 64,  "num_warps": 4,  "num_stages": 3},                                  # +20.0% (nonkdim=default)
+    (2, 512,  3, 64, 64):  {"BT": 64, "BV": 64,  "num_warps": 4,  "num_stages": 1, "matrix_instr_nonkdim": 16},      # +47.2%
+    (2, 1024, 3, 64, 64):  {"BT": 64, "BV": 64,  "num_warps": 4,  "num_stages": 3, "matrix_instr_nonkdim": 16},      # +47.9%
 }
 
 DEFAULT_CONFIG: Dict[str, int] = {"BT": 64, "BV": 64, "num_warps": 8, "num_stages": 2}
@@ -205,6 +205,8 @@ def custom_kernel(data: Dict[str, Any]) -> torch.Tensor:
         BT=BT, BK=BK, BV=BV,
         num_warps=num_warps,
         num_stages=num_stages,
+        **({"matrix_instr_nonkdim": int(cfg["matrix_instr_nonkdim"])}
+           if cfg.get("matrix_instr_nonkdim") else {}),
     )
 
     return o

@@ -1,6 +1,6 @@
 {
   "kernel": "recompute_w_u",
-  "configs_tested": 27,
+  "configs_tested": 81,
   "by_shape": {
     "B=1, T=64, H=1, K=64, V=64, seed=31232": {
       "shape_key": [
@@ -10,95 +10,106 @@
         64,
         64
       ],
-      "baseline_us": 48.872001469135284,
+      "baseline_us": 38.88799995183945,
       "best": {
         "config": {
           "num_warps": 4,
-          "num_stages": 3,
-          "GROUP_SIZE": 16
+          "num_stages": 1,
+          "GROUP_SIZE": 16,
+          "matrix_instr_nonkdim": 16
         },
-        "min_us": 38.447000086307526
+        "min_us": 36.28300130367279
       },
       "all_ok": [
         {
           "config": {
             "num_warps": 4,
-            "num_stages": 3,
-            "GROUP_SIZE": 16
-          },
-          "min_us": 38.447000086307526
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 2,
-            "GROUP_SIZE": 4
-          },
-          "min_us": 40.45199975371361
-        },
-        {
-          "config": {
-            "num_warps": 4,
             "num_stages": 1,
-            "GROUP_SIZE": 16
+            "GROUP_SIZE": 16,
+            "matrix_instr_nonkdim": 16
           },
-          "min_us": 41.89499840140343
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 1,
-            "GROUP_SIZE": 8
-          },
-          "min_us": 45.141998678445816
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 3,
-            "GROUP_SIZE": 8
-          },
-          "min_us": 45.38299888372421
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 2,
-            "GROUP_SIZE": 8
-          },
-          "min_us": 45.46299949288368
+          "min_us": 36.28300130367279
         },
         {
           "config": {
             "num_warps": 8,
-            "num_stages": 2,
-            "GROUP_SIZE": 8
+            "num_stages": 3,
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 16
           },
-          "min_us": 45.54399847984314
+          "min_us": 36.72400116920471
         },
         {
           "config": {
-            "num_warps": 4,
-            "num_stages": 2,
-            "GROUP_SIZE": 16
+            "num_warps": 8,
+            "num_stages": 3,
+            "GROUP_SIZE": 16,
+            "matrix_instr_nonkdim": 16
           },
-          "min_us": 45.62399908900261
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 1,
-            "GROUP_SIZE": 4
-          },
-          "min_us": 45.66400125622749
+          "min_us": 37.324998527765274
         },
         {
           "config": {
             "num_warps": 8,
             "num_stages": 1,
-            "GROUP_SIZE": 4
+            "GROUP_SIZE": 16,
+            "matrix_instr_nonkdim": 16
           },
-          "min_us": 46.74699902534485
+          "min_us": 38.76899927854538
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 3,
+            "GROUP_SIZE": 16
+          },
+          "min_us": 38.88799995183945,
+          "is_baseline": true
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 2,
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 39.60999846458435
+        },
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 2,
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 39.76999968290329
+        },
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 2,
+            "GROUP_SIZE": 16,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 39.81100022792816
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 1,
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 40.171001106500626
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 3,
+            "GROUP_SIZE": 16,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 40.49199819564819
         }
       ],
       "n_failed": 0,
@@ -112,95 +123,106 @@
         64,
         64
       ],
-      "baseline_us": 48.63100126385689,
+      "baseline_us": 41.85499995946884,
       "best": {
         "config": {
           "num_warps": 4,
-          "num_stages": 3,
-          "GROUP_SIZE": 16
+          "num_stages": 2,
+          "GROUP_SIZE": 8,
+          "matrix_instr_nonkdim": 16
         },
-        "min_us": 40.29199853539467
+        "min_us": 39.129000157117844
       },
       "all_ok": [
         {
           "config": {
             "num_warps": 4,
-            "num_stages": 3,
-            "GROUP_SIZE": 16
+            "num_stages": 2,
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 16
           },
-          "min_us": 40.29199853539467
+          "min_us": 39.129000157117844
         },
         {
           "config": {
             "num_warps": 4,
             "num_stages": 1,
-            "GROUP_SIZE": 4
+            "GROUP_SIZE": 4,
+            "matrix_instr_nonkdim": 32
           },
-          "min_us": 42.256999760866165
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 2,
-            "GROUP_SIZE": 8
-          },
-          "min_us": 42.858000844717026
+          "min_us": 39.12999853491783
         },
         {
           "config": {
             "num_warps": 4,
             "num_stages": 3,
-            "GROUP_SIZE": 8
+            "GROUP_SIZE": 4,
+            "matrix_instr_nonkdim": 16
           },
-          "min_us": 45.10299861431122
-        },
-        {
-          "config": {
-            "num_warps": 8,
-            "num_stages": 3,
-            "GROUP_SIZE": 4
-          },
-          "min_us": 45.10299861431122
+          "min_us": 40.17199948430061
         },
         {
           "config": {
             "num_warps": 4,
             "num_stages": 1,
-            "GROUP_SIZE": 8
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 16
           },
-          "min_us": 45.1430007815361
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 2,
-            "GROUP_SIZE": 4
-          },
-          "min_us": 45.62300071120262
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 2,
-            "GROUP_SIZE": 16
-          },
-          "min_us": 45.66400125622749
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 3,
-            "GROUP_SIZE": 4
-          },
-          "min_us": 45.78400030732155
+          "min_us": 40.41200131177902
         },
         {
           "config": {
             "num_warps": 8,
             "num_stages": 1,
-            "GROUP_SIZE": 8
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 16
           },
-          "min_us": 46.505000442266464
+          "min_us": 40.41200131177902
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 2,
+            "GROUP_SIZE": 16,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 41.77600145339966
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 3,
+            "GROUP_SIZE": 16
+          },
+          "min_us": 41.85499995946884,
+          "is_baseline": true
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 2,
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 41.9359989464283
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 3,
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 42.497001588344574
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 3,
+            "GROUP_SIZE": 4,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 42.53700003027916
         }
       ],
       "n_failed": 0,
@@ -214,45 +236,41 @@
         64,
         64
       ],
-      "baseline_us": 50.755999982357025,
+      "baseline_us": 46.626001596450806,
       "best": {
         "config": {
           "num_warps": 4,
-          "num_stages": 2,
-          "GROUP_SIZE": 8
+          "num_stages": 1,
+          "GROUP_SIZE": 4,
+          "matrix_instr_nonkdim": 16
         },
-        "min_us": 37.28500008583069
+        "min_us": 39.409998804330826
       },
       "all_ok": [
         {
           "config": {
             "num_warps": 4,
-            "num_stages": 2,
-            "GROUP_SIZE": 8
+            "num_stages": 1,
+            "GROUP_SIZE": 4,
+            "matrix_instr_nonkdim": 16
           },
-          "min_us": 37.28500008583069
+          "min_us": 39.409998804330826
         },
         {
           "config": {
             "num_warps": 4,
-            "num_stages": 2,
-            "GROUP_SIZE": 4
+            "num_stages": 1,
+            "GROUP_SIZE": 16,
+            "matrix_instr_nonkdim": 16
           },
-          "min_us": 40.57199880480766
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 3,
-            "GROUP_SIZE": 16
-          },
-          "min_us": 41.735999286174774
+          "min_us": 42.09600016474724
         },
         {
           "config": {
             "num_warps": 8,
-            "num_stages": 1,
-            "GROUP_SIZE": 4
+            "num_stages": 3,
+            "GROUP_SIZE": 16,
+            "matrix_instr_nonkdim": 16
           },
           "min_us": 42.97799989581108
         },
@@ -260,49 +278,64 @@
           "config": {
             "num_warps": 4,
             "num_stages": 2,
-            "GROUP_SIZE": 16
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 0
           },
-          "min_us": 43.258000165224075
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 1,
-            "GROUP_SIZE": 4
-          },
-          "min_us": 43.82000118494034
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 1,
-            "GROUP_SIZE": 8
-          },
-          "min_us": 45.4230010509491
+          "min_us": 44.58099976181984
         },
         {
           "config": {
             "num_warps": 4,
             "num_stages": 3,
-            "GROUP_SIZE": 4
+            "GROUP_SIZE": 16,
+            "matrix_instr_nonkdim": 0
           },
-          "min_us": 46.3859997689724
-        },
-        {
-          "config": {
-            "num_warps": 4,
-            "num_stages": 3,
-            "GROUP_SIZE": 8
-          },
-          "min_us": 46.42599821090698
+          "min_us": 44.70200091600418
         },
         {
           "config": {
             "num_warps": 4,
             "num_stages": 1,
-            "GROUP_SIZE": 16
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 16
           },
-          "min_us": 46.74699902534485
+          "min_us": 45.504000037908554
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 3,
+            "GROUP_SIZE": 16,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 45.78400030732155
+        },
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 1,
+            "GROUP_SIZE": 8,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 45.944999903440475
+        },
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 2,
+            "GROUP_SIZE": 4,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 46.50599882006645
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 2,
+            "GROUP_SIZE": 8
+          },
+          "min_us": 46.626001596450806,
+          "is_baseline": true
         }
       ],
       "n_failed": 0,

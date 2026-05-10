@@ -43,9 +43,9 @@ SHAPE_CONFIGS = {
     (2, 128, 4, 64, 64):   {"num_warps": 4, "num_stages": 3},
     (1, 256, 4, 64, 128):  {"num_warps": 4, "num_stages": 3},
     # benchmarks (autotuned on MI300X -- see results/autotune_summary.csv)
-    (1, 64, 1, 64, 64):    {"num_warps": 8, "num_stages": 3},  # noqa: F601
-    (2, 512, 3, 64, 64):   {"num_warps": 4, "num_stages": 1},  # +3.9% vs num_stages=3
-    (2, 1024, 3, 64, 64):  {"num_warps": 4, "num_stages": 3},
+    (1, 64, 1, 64, 64):    {"num_warps": 8, "num_stages": 1},  # +7.8% (nonkdim=default)  # noqa: F601
+    (2, 512, 3, 64, 64):   {"num_warps": 4, "num_stages": 3},  # +16.5% (nonkdim=default)
+    (2, 1024, 3, 64, 64):  {"num_warps": 16, "num_stages": 4, "matrix_instr_nonkdim": 16},  # +12.1%
 }
 
 
@@ -184,6 +184,8 @@ def custom_kernel(data) -> torch.Tensor:
         LOG2E=LOG2E,
         num_warps=cfg["num_warps"],
         num_stages=cfg["num_stages"],
+        **({"matrix_instr_nonkdim": int(cfg["matrix_instr_nonkdim"])}
+           if cfg.get("matrix_instr_nonkdim") else {}),
     )
 
     return h_out

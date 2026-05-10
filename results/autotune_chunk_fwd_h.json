@@ -1,0 +1,312 @@
+{
+  "kernel": "chunk_fwd_h",
+  "configs_tested": 36,
+  "by_shape": {
+    "B=1, T=64, H=1, K=64, V=64, seed=31232": {
+      "shape_key": [
+        1,
+        64,
+        1,
+        64,
+        64
+      ],
+      "baseline_us": 27.141999453306198,
+      "best": {
+        "config": {
+          "num_warps": 8,
+          "num_stages": 1,
+          "matrix_instr_nonkdim": 0
+        },
+        "min_us": 25.01700073480606
+      },
+      "all_ok": [
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 1,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 25.01700073480606
+        },
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 3,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 25.09699948132038
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 4,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 25.738999247550964
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 2,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 25.899000465869904
+        },
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 2,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 26.100000366568565
+        },
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 3,
+            "matrix_instr_nonkdim": 32
+          },
+          "min_us": 26.460999622941017
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 1,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 26.58100053668022
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 2,
+            "matrix_instr_nonkdim": 32
+          },
+          "min_us": 26.660000905394554
+        },
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 2,
+            "matrix_instr_nonkdim": 32
+          },
+          "min_us": 26.781000196933746
+        },
+        {
+          "config": {
+            "num_warps": 16,
+            "num_stages": 3,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 27.101999148726463
+        }
+      ],
+      "n_failed": 0,
+      "first_failure": null
+    },
+    "B=2, T=512, H=3, K=64, V=64, seed=4052": {
+      "shape_key": [
+        2,
+        512,
+        3,
+        64,
+        64
+      ],
+      "baseline_us": 39.60999846458435,
+      "best": {
+        "config": {
+          "num_warps": 4,
+          "num_stages": 3,
+          "matrix_instr_nonkdim": 0
+        },
+        "min_us": 33.07599946856499
+      },
+      "all_ok": [
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 3,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 33.07599946856499
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 4,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 35.11999920010567
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 1,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 37.56500035524368
+        },
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 4,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 38.247000426054
+        },
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 3,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 38.447000086307526
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 2,
+            "matrix_instr_nonkdim": 32
+          },
+          "min_us": 38.84800150990486
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 3,
+            "matrix_instr_nonkdim": 32
+          },
+          "min_us": 39.00900110602379
+        },
+        {
+          "config": {
+            "num_warps": 16,
+            "num_stages": 4,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 39.08900171518326
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 1
+          },
+          "min_us": 39.60999846458435,
+          "is_baseline": true
+        },
+        {
+          "config": {
+            "num_warps": 16,
+            "num_stages": 2,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 40.011998265981674
+        }
+      ],
+      "n_failed": 0,
+      "first_failure": null
+    },
+    "B=2, T=1024, H=3, K=64, V=64, seed=2146": {
+      "shape_key": [
+        2,
+        1024,
+        3,
+        64,
+        64
+      ],
+      "baseline_us": 56.28800019621849,
+      "best": {
+        "config": {
+          "num_warps": 16,
+          "num_stages": 4,
+          "matrix_instr_nonkdim": 16
+        },
+        "min_us": 49.47200044989586
+      },
+      "all_ok": [
+        {
+          "config": {
+            "num_warps": 16,
+            "num_stages": 4,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 49.47200044989586
+        },
+        {
+          "config": {
+            "num_warps": 16,
+            "num_stages": 1,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 50.95599964261055
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 3,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 51.83799937367439
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 2,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 52.719999104738235
+        },
+        {
+          "config": {
+            "num_warps": 16,
+            "num_stages": 2,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 54.003000259399414
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 4,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 54.322998970746994
+        },
+        {
+          "config": {
+            "num_warps": 16,
+            "num_stages": 3,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 54.524000734090805
+        },
+        {
+          "config": {
+            "num_warps": 8,
+            "num_stages": 1,
+            "matrix_instr_nonkdim": 16
+          },
+          "min_us": 54.64399978518486
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 1,
+            "matrix_instr_nonkdim": 0
+          },
+          "min_us": 55.24599924683571
+        },
+        {
+          "config": {
+            "num_warps": 4,
+            "num_stages": 2,
+            "matrix_instr_nonkdim": 32
+          },
+          "min_us": 55.44599890708923
+        }
+      ],
+      "n_failed": 0,
+      "first_failure": null
+    }
+  }
+}

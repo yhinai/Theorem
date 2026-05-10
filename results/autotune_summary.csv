@@ -1,4 +1,10 @@
 kernel,shape,baseline_us,best_us,best_config,improvement_pct,n_failed,error
-recompute_w_u,"B=1, T=64, H=1, K=64, V=64, seed=31232",48.872,38.447,"{""num_warps"": 4, ""num_stages"": 3, ""GROUP_SIZE"": 16}",+21.33,0,
-recompute_w_u,"B=2, T=512, H=3, K=64, V=64, seed=4052",48.631,40.292,"{""num_warps"": 4, ""num_stages"": 3, ""GROUP_SIZE"": 16}",+17.15,0,
-recompute_w_u,"B=2, T=1024, H=3, K=64, V=64, seed=2146",50.756,37.285,"{""num_warps"": 4, ""num_stages"": 2, ""GROUP_SIZE"": 8}",+26.54,0,
+chunk_fwd_h,"B=1, T=64, H=1, K=64, V=64, seed=31232",27.142,25.017,"{""num_warps"": 8, ""num_stages"": 1, ""matrix_instr_nonkdim"": 0}",+7.83,0,
+chunk_fwd_h,"B=2, T=512, H=3, K=64, V=64, seed=4052",39.610,33.076,"{""num_warps"": 4, ""num_stages"": 3, ""matrix_instr_nonkdim"": 0}",+16.50,0,
+chunk_fwd_h,"B=2, T=1024, H=3, K=64, V=64, seed=2146",56.288,49.472,"{""num_warps"": 16, ""num_stages"": 4, ""matrix_instr_nonkdim"": 16}",+12.11,0,
+chunk_fwd_o,"B=1, T=64, H=1, K=64, V=64, seed=31232",44.461,35.561,"{""num_warps"": 4, ""num_stages"": 3, ""matrix_instr_nonkdim"": 0}",+20.02,0,
+chunk_fwd_o,"B=2, T=512, H=3, K=64, V=64, seed=4052",72.365,38.247,"{""num_warps"": 4, ""num_stages"": 1, ""matrix_instr_nonkdim"": 16}",+47.15,0,
+chunk_fwd_o,"B=2, T=1024, H=3, K=64, V=64, seed=2146",70.440,36.723,"{""num_warps"": 4, ""num_stages"": 3, ""matrix_instr_nonkdim"": 16}",+47.87,0,
+recompute_w_u,"B=1, T=64, H=1, K=64, V=64, seed=31232",38.888,36.283,"{""num_warps"": 4, ""num_stages"": 1, ""GROUP_SIZE"": 16, ""matrix_instr_nonkdim"": 16}",+6.70,0,
+recompute_w_u,"B=2, T=512, H=3, K=64, V=64, seed=4052",41.855,39.129,"{""num_warps"": 4, ""num_stages"": 2, ""GROUP_SIZE"": 8, ""matrix_instr_nonkdim"": 16}",+6.51,0,
+recompute_w_u,"B=2, T=1024, H=3, K=64, V=64, seed=2146",46.626,39.410,"{""num_warps"": 4, ""num_stages"": 1, ""GROUP_SIZE"": 4, ""matrix_instr_nonkdim"": 16}",+15.48,0,

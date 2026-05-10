@@ -79,17 +79,23 @@ def apply_causal_conv1d(mod: Any, cfg: dict, shape_key: tuple) -> None:
 
 
 def apply_chunk_fwd_h(mod: Any, cfg: dict, shape_key: tuple) -> None:
-    mod.SHAPE_CONFIGS[shape_key] = {
+    new_cfg = {
         "num_warps": cfg["num_warps"],
         "num_stages": cfg["num_stages"],
     }
+    if cfg.get("matrix_instr_nonkdim"):
+        new_cfg["matrix_instr_nonkdim"] = cfg["matrix_instr_nonkdim"]
+    mod.SHAPE_CONFIGS[shape_key] = new_cfg
 
 
 def apply_chunk_fwd_o(mod: Any, cfg: dict, shape_key: tuple) -> None:
-    mod.SHAPE_CONFIGS[shape_key] = {
-        "num_warps": cfg["num_warps"],
-        "num_stages": cfg["num_stages"],
-    }
+    # Preserve BT/BV from the original config (the kernel needs them).
+    base = dict(mod.SHAPE_CONFIGS.get(shape_key, mod.DEFAULT_CONFIG))
+    base["num_warps"] = cfg["num_warps"]
+    base["num_stages"] = cfg["num_stages"]
+    if cfg.get("matrix_instr_nonkdim"):
+        base["matrix_instr_nonkdim"] = cfg["matrix_instr_nonkdim"]
+    mod.SHAPE_CONFIGS[shape_key] = base
 
 
 def apply_recompute_w_u(mod: Any, cfg: dict, shape_key: tuple) -> None:
@@ -99,6 +105,8 @@ def apply_recompute_w_u(mod: Any, cfg: dict, shape_key: tuple) -> None:
     }
     if "GROUP_SIZE" in cfg:
         new_cfg["GROUP_SIZE"] = cfg["GROUP_SIZE"]
+    if cfg.get("matrix_instr_nonkdim"):
+        new_cfg["matrix_instr_nonkdim"] = cfg["matrix_instr_nonkdim"]
     mod.SHAPE_CONFIGS[shape_key] = new_cfg
 
 
@@ -118,6 +126,7 @@ GRIDS: dict[str, GridSpec] = {
         grid={
             "num_warps": [4, 8, 16],
             "num_stages": [1, 2, 3, 4],
+            "matrix_instr_nonkdim": [0, 16, 32],
         },
         apply_fn=apply_chunk_fwd_h,
     ),
@@ -126,6 +135,7 @@ GRIDS: dict[str, GridSpec] = {
         grid={
             "num_warps": [4, 8, 16],
             "num_stages": [1, 2, 3],
+            "matrix_instr_nonkdim": [0, 16, 32],
         },
         apply_fn=apply_chunk_fwd_o,
     ),
@@ -135,6 +145,7 @@ GRIDS: dict[str, GridSpec] = {
             "num_warps": [4, 8, 16],
             "num_stages": [1, 2, 3],
             "GROUP_SIZE": [4, 8, 16],
+            "matrix_instr_nonkdim": [0, 16, 32],
         },
         apply_fn=apply_recompute_w_u,
     ),

@@ -60,10 +60,10 @@ SHAPE_CONFIGS: dict[tuple, dict] = {
     (1, 64, 2, 64, 64):    {"num_warps": 4, "num_stages": 3, "GROUP_SIZE": 16},
     (2, 128, 4, 64, 64):   {"num_warps": 4, "num_stages": 3, "GROUP_SIZE": 16},
     (1, 256, 4, 64, 128):  {"num_warps": 4, "num_stages": 3, "GROUP_SIZE": 16},
-    # benchmarks (autotuned)
-    (1, 64, 1, 64, 64):    {"num_warps": 4, "num_stages": 3, "GROUP_SIZE": 16},  # +21.3%
-    (2, 512, 3, 64, 64):   {"num_warps": 4, "num_stages": 3, "GROUP_SIZE": 16},  # +17.1%
-    (2, 1024, 3, 64, 64):  {"num_warps": 4, "num_stages": 2, "GROUP_SIZE": 8},   # +26.5%
+    # benchmarks (autotuned on MI300X -- see results/autotune_summary.csv)
+    (1, 64, 1, 64, 64):    {"num_warps": 4, "num_stages": 1, "GROUP_SIZE": 16, "matrix_instr_nonkdim": 16},  # +6.7% over prior
+    (2, 512, 3, 64, 64):   {"num_warps": 4, "num_stages": 2, "GROUP_SIZE": 8,  "matrix_instr_nonkdim": 16},  # +6.5% over prior
+    (2, 1024, 3, 64, 64):  {"num_warps": 4, "num_stages": 1, "GROUP_SIZE": 4,  "matrix_instr_nonkdim": 16},  # +15.5% over prior
 }
 
 
@@ -237,6 +237,8 @@ def _launch(k: torch.Tensor, v: torch.Tensor, beta: torch.Tensor,
         NUM_PROGS=NUM_PROGS,
         num_warps=int(cfg["num_warps"]),
         num_stages=int(cfg["num_stages"]),
+        **({"matrix_instr_nonkdim": int(cfg["matrix_instr_nonkdim"])}
+           if cfg.get("matrix_instr_nonkdim") else {}),
     )
     return w, u
 

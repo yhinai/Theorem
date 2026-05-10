@@ -146,10 +146,10 @@ BLOCK_D=64`) were left ~30-39% on the table.
 
 | Shape `(B, D, S, W)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 1536, 2048, 4) | 74.45 | 33.20 | **2.24×** |
-| (1, 2560, 2048, 4) | 89.32 | 37.17 | **2.40×** |
-| (1, 2560, 4096, 4) | 130.34 | 50.23 | **2.59×** |
-| **geomean** | **96.1** | **39.4** | **2.41×** |
+| (1, 1536, 2048, 4) | 74.73 | 27.86 | **2.68×** |
+| (1, 2560, 2048, 4) | 89.76 | 34.00 | **2.64×** |
+| (1, 2560, 4096, 4) | 126.13 | 43.70 | **2.89×** |
+| **geomean** | **95.0** | **34.6** | **2.73×** |
 
 ### 3.2 `chunk_fwd_h` — gated DeltaNet inter-chunk state recurrence
 
@@ -160,22 +160,29 @@ as `T` grows.
 
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 118.75 | 31.35 | **3.79×** |
-| (2, 512, 3, 64, 64) | 747.26 | 40.97 | **18.24×** |
-| (2, 1024, 3, 64, 64) | 1434.59 | 50.43 | **28.44×** |
-| **geomean** | **480.6** | **40.1** | **12.52×** |
+| (1, 64, 1, 64, 64) | 105.68 | 28.06 | **3.77×** |
+| (2, 512, 3, 64, 64) | 757.49 | 41.41 | **18.29×** |
+| (2, 1024, 3, 64, 64) | 1466.46 | 52.64 | **27.86×** |
+| **geomean** | **489.9** | **39.4** | **12.42×** |
 
 ### 3.3 `chunk_fwd_o` — gated DeltaNet chunkwise output
 
-Hand-picked configs were optimal in the 9-config sweep — no autotune-driven
-change.
+The biggest single tuning win in the repo (+47% on the larger shapes).
+Two changes shipped together:
+1. `num_warps`: 16 → 4. The hand-picked 16 was over-subscribed on CDNA3
+   (16 warps × 64 lanes = 1024 threads/CTA — more than the 64×64 MFMA
+   tile can usefully employ). Bringing it to 4 freed VGPRs and let
+   occupancy climb.
+2. `matrix_instr_nonkdim=16`. Triton's default chose the 32×32×2 fp32
+   MFMA shape; the 16×16×4 shape (`nonkdim=16`) maps better onto a
+   per-chunk 64×64 dot when divided across 4 warps.
 
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 153.35 | 47.51 | **3.23×** |
-| (2, 512, 3, 64, 64) | 185.78 | 67.75 | **2.74×** |
-| (2, 1024, 3, 64, 64) | 178.73 | 71.68 | **2.49×** |
-| **geomean** | **172.3** | **61.7** | **2.80×** |
+| (1, 64, 1, 64, 64) | 162.33 | 42.74 | **3.80×** |
+| (2, 512, 3, 64, 64) | 208.72 | 41.01 | **5.09×** |
+| (2, 1024, 3, 64, 64) | 211.20 | 44.50 | **4.75×** |
+| **geomean** | **192.7** | **42.7** | **4.51×** |
 
 ### 3.4 `recompute_w_u` — gated DeltaNet WY-transform recompute
 
@@ -188,10 +195,10 @@ broadening the L2-friendly tile-reorder window. Improvement +17-26% per shape.
 
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 98.30 | 23.25 | **4.23×** |
-| (2, 512, 3, 64, 64) | 126.57 | 42.14 | **3.00×** |
-| (2, 1024, 3, 64, 64) | 137.03 | 44.22 | **3.10×** |
-| **geomean** | **119.7** | **35.1** | **3.40×** |
+| (1, 64, 1, 64, 64) | 104.80 | 39.05 | **2.68×** |
+| (2, 512, 3, 64, 64) | 146.49 | 44.46 | **3.29×** |
+| (2, 1024, 3, 64, 64) | 125.73 | 42.94 | **2.93×** |
+| **geomean** | **124.4** | **42.1** | **2.96×** |
 
 ### 3.5 Sanity check — vs `torch.compile(mode="max-autotune-no-cudagraphs")`
 
@@ -200,10 +207,10 @@ itself emits Triton-AMD code under the hood) on every shape:
 
 | Kernel | Geomean speedup over `torch.compile` |
 |---|---:|
-| `causal_conv1d` | **2.87×** |
-| `chunk_fwd_h` | **4.27×** |
-| `chunk_fwd_o` | **1.57×** |
-| `recompute_w_u` | **2.74×** |
+| `causal_conv1d` | **3.20×** |
+| `chunk_fwd_h` | **4.10×** |
+| `chunk_fwd_o` | **2.34×** |
+| `recompute_w_u` | **2.34×** |
 
 ### 3.6 Reproducing the autotune
 
