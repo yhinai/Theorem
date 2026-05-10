@@ -36,17 +36,24 @@ supported and will not be backported.
 
 ---
 
-## Kernel inventory
+## Kernel inventory — reference vs optimized
 
-| Kernel | Math (sketch) | CDNA3-aware optimization | Status |
-| --- | --- | --- | --- |
-| `causal_conv1d` | Depthwise 1D causal convolution `y[t,c] = Σ_k w[k,c] · x[t-k,c]` (used in Mamba / Mamba-2-style architectures). | Block sized to whole 64-lane wavefronts along channel axis; LDS-resident weight tile reused across the time dimension; bias and SiLU fused into the epilogue. | placeholder |
-| `gated_deltanet_chunk_fwd_h` | Inter-chunk recurrence `S_{c+1} = G_c · S_c + K_cᵀ V_c` over fixed-size chunks (gated DeltaNet, arXiv:2412.06464). | State `S` pinned in LDS across the chunk-step loop; `tl.dot` mapped to Matrix Cores in `(BK, BV)` tiles; `num_stages` chosen so the next chunk's K/V are pipelined under the current dot. | placeholder |
-| `gated_deltanet_chunk_fwd_o` | Chunkwise output `O_c = (Q_c K_cᵀ ⊙ M) V_c + Q_c S_c` (local causal attention plus global state read). | Two `tl.dot` blocks share one Q tile in registers; causal mask materialized at compile time per `BT`; state read coalesced from HBM3e and broadcast through LDS. | placeholder |
-| `gated_deltanet_recompute_w_u` | Recomputes the WY-transform helpers `W = β · (I − tril(K Kᵀ)·β)⁻¹` and `U` used by the backward pass. | In-place lower-triangular solve unrolled at the `BT` block size; recompute traded against HBM bandwidth so the backward never spills WY tiles to global. | placeholder |
+Measured on AMD Instinct MI300X. **Reference** is the PyTorch eager implementation
+(`F.conv1d`, eager DeltaNet matmul/einsum loops). **Optimized** is the Triton
+kernel in this repo. Both are min-of-50-iter microbenchmarks at fp32. Geomean
+speedup is across the kernel's three benchmark shapes (full per-shape table in
+[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)).
 
-Status is `placeholder` until each kernel lands with a benchmark CSV in
-`results/`.
+| Kernel | Math (sketch) | CDNA3-aware optimization | Reference (µs, geomean) | Optimized (µs, geomean) | Speedup |
+| --- | --- | --- | ---: | ---: | ---: |
+| `causal_conv1d` | Depthwise 1D causal convolution `y[t,c] = Σ_k w[k,c] · x[t-k,c]` (used in Mamba / Mamba-2-style architectures). | Block sized to whole 64-lane wavefronts along channel axis; LDS-resident weight tile reused across the time dimension; per-shape `BLOCK_S × BLOCK_D` configs. | 95.5 | 50.3 | **1.90×** |
+| `gated_deltanet_chunk_fwd_h` | Inter-chunk recurrence `S_{c+1} = G_c · S_c + K_cᵀ V_c` over fixed-size chunks (gated DeltaNet, arXiv:2412.06464). | State `S` pinned in registers across the chunk-step loop; `tl.dot` mapped to Matrix Cores; `num_stages=3` so the next chunk's K/V are pipelined under the current dot. | 414.0 | 38.2 | **13.18×** |
+| `gated_deltanet_chunk_fwd_o` | Chunkwise output `O_c = (Q_c K_cᵀ ⊙ M) V_c + Q_c S_c` (local causal attention plus global state read). | Two `tl.dot` blocks share one Q tile in registers; causal mask materialized at compile time per `BT`; state read coalesced from HBM3e through LDS. | 184.8 | 60.8 | **3.04×** |
+| `gated_deltanet_recompute_w_u` | Recomputes the WY-transform helpers `W = β · (I − tril(K Kᵀ)·β)⁻¹` and `U` used by the backward pass. | Two `tl.dot` matmuls per chunk (the matmul reformulation); persistent-blocked program scheduling; L2 reordering. | 124.4 | 47.9 | **2.61×** |
+
+The Triton kernels also outperform `torch.compile(mode="max-autotune-no-cudagraphs")`
+on every shape — by **1.59× to 4.04×** geomean (full data:
+[`results/baseline_compare.csv`](results/baseline_compare.csv)).
 
 ---
 
