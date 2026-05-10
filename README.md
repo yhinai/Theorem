@@ -12,7 +12,7 @@ Autotune-swept on real CDNA3 silicon. **2.7–12.4×** over PyTorch eager, **2.3
 [![Status](https://img.shields.io/badge/Status-Reproducible-2BBC8A.svg)](#reproducing-the-numbers)
 [![Bench](https://img.shields.io/badge/vs%20torch.compile-2.34%E2%80%934.10%C3%97-2BBC8A.svg)](docs/BENCHMARKS.md)
 
-[Demo](#demo)&nbsp;·&nbsp;[Slides](assets/theorem_slides.pdf)&nbsp;·&nbsp;[Quick start](#quick-start)&nbsp;·&nbsp;[Usage](#usage)&nbsp;·&nbsp;[Benchmarks](docs/BENCHMARKS.md)&nbsp;·&nbsp;[Optimizations](docs/OPTIMIZATIONS.md)&nbsp;·&nbsp;[Architecture](docs/ARCHITECTURE.md)
+[Demo](#demo)&nbsp;·&nbsp;[Slides](assets/theorem_slides.pdf)&nbsp;·&nbsp;[Quick start](#quick-start)&nbsp;·&nbsp;[Benchmarks](docs/BENCHMARKS.md)&nbsp;·&nbsp;[Optimizations](docs/OPTIMIZATIONS.md)&nbsp;·&nbsp;[Architecture](docs/ARCHITECTURE.md)
 
 </div>
 
@@ -34,13 +34,14 @@ Six commands, two terminal windows, end-to-end. Copy-paste each block in order.
 
 ### Window 1 — the headline
 
-**1. Log in to the AMD MI300X server.**
+**1. Log in to the AMD MI300X server, drop into the repo, activate the venv.**
 
 ```bash
-ssh amd
+ssh root@<your-mi300x-host>
+cd /root/Theorem && source /root/axiom/.venv/bin/activate
 ```
 
-> *"Single AMD Instinct MI300X — 304 compute units, 192 GB of HBM3e. The SSH alias drops me straight into the repo with the ROCm venv already activated."*
+> *"Single AMD Instinct MI300X — 304 compute units, 192 GB of HBM3e. ROCm + Triton venv activated, repo in working directory."*
 
 You'll land at `(.venv) root@... /root/Theorem#`.
 
@@ -97,7 +98,7 @@ Wait ~30 seconds. The output ends with the markdown table — **this is the slid
 Open a second SSH window so the audience can watch the GPU work while step 4 runs:
 
 ```bash
-ssh amd
+ssh root@<your-mi300x-host>
 watch -n 0.5 'rocm-smi --showuse --showmeminfo vram --showpower --showtemp'
 ```
 
@@ -286,44 +287,6 @@ python scripts/run_amd.py        # smoke-test all four kernels on the smallest t
 ```
 
 Expected output: four `PASS` lines and a one-line GPU banner. If `setup_env.sh` cannot find `rocm-smi` it will exit with a clear error before installing anything — that is the signal you are not on a ROCm host.
-
----
-
-## Usage
-
-Every kernel ships with a uniform Python entry point: `custom_kernel(data) -> output`, where `data` is whatever `generate_input(...)` returns. Importing follows the standard package pattern.
-
-### `causal_conv1d`
-
-```python
-import torch
-from kernels.causal_conv1d import custom_kernel
-from kernels.causal_conv1d.reference import generate_input
-
-# Generate inputs deterministically (or pass your own tensors on cuda:0).
-data = generate_input(B=1, D=1536, S=2048, W=4, seed=2146)
-# data == (x: [B, D, S], weight: [D, W], bias: [D])  -- all fp32 on cuda:0
-
-out = custom_kernel(data)        # [B, D, S] fp32
-```
-
-### `chunk_fwd_h`, `chunk_fwd_o`, `recompute_w_u`
-
-```python
-from kernels.chunk_fwd_h import custom_kernel as chunk_fwd_h
-from kernels.chunk_fwd_h.reference import generate_input
-
-data = generate_input(B=2, T=512, H=3, K=64, V=64, seed=4052)
-# data == {"k": ..., "v": ..., "g": ..., "B": 2, "T": 512, "H": 3, "K": 64, "V": 64}
-
-h = chunk_fwd_h(data)            # [B, NT, H, K, V] fp32
-```
-
-The same import shape works for `chunk_fwd_o` (returns `o`) and `recompute_w_u` (returns `(w, u)`). All inputs and outputs are fp32 by spec — see [Known limitations](#known-limitations).
-
-### Bring-your-own tensors
-
-The kernels do not require `generate_input` — you can pass your own live tensors. The expected dtype is `torch.float32` and device is `cuda:0` (PyTorch's ROCm builds reuse the `cuda` namespace). For `causal_conv1d` you pass the tuple `(x, weight, bias)`; for the gated DeltaNet kernels you pass the dict shown above.
 
 ---
 
