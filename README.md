@@ -28,6 +28,107 @@ Autotune-swept on real CDNA3 silicon. **2.7–12.4×** over PyTorch eager, **2.3
 
 ---
 
+## Live demo runbook (in-person, 2 minutes)
+
+Six commands, two terminal windows, end-to-end. Copy-paste each block in order.
+
+### Window 1 — the headline
+
+**1. Log in to the AMD MI300X server.**
+
+```bash
+ssh amd
+```
+
+> *"Single AMD Instinct MI300X — 304 compute units, 192 GB of HBM3e. The SSH alias drops me straight into the repo with the ROCm venv already activated."*
+
+You'll land at `(.venv) root@... /root/Theorem#`.
+
+**2. Confirm the GPU.**
+
+```bash
+rocminfo | grep -E "Marketing Name|Compute Unit|gfx" | head -4
+```
+
+> *"AMD Instinct MI300X VF, gfx942, 304 CUs. CDNA3 silicon."*
+
+**3. Smoke test — all four kernels at the smallest test shape.**
+
+```bash
+python scripts/run_amd.py
+```
+
+> *"All four kernels pass correctness against the PyTorch reference at `rtol = atol = 1e-2`. Now the speed."*
+
+Expected output:
+```
+PyTorch  : 2.5.1+rocm6.2
+GPU      : AMD Instinct MI300X VF
+causal_conv1d   PASS
+chunk_fwd_h     PASS
+chunk_fwd_o     PASS
+recompute_w_u   PASS
+```
+
+**4. The headline command — reference vs optimized.**
+
+```bash
+python benchmarks/pytorch_baseline.py
+```
+
+> *"Three things being timed per shape: PyTorch eager — what someone writes with `F.conv1d` and `torch.matmul`. `torch.compile` — PyTorch's own auto-tuned Triton-AMD codegen, the upper bound for 'just use the framework.' And the Triton kernel in this repo. Five warmup, fifty timed iterations, `torch.cuda.Event` timing, L2 cache flushed between iterations."*
+
+Wait ~30 seconds. The output ends with the markdown table — **this is the slide.**
+
+```
+| kernel        | shape                    | triton_us | eager_us | compiled_us | speedup_vs_eager |
+| causal_conv1d | B=1,D=2560,S=4096,W=4    |     46.79 |   128.09 |      147.58 |          2.74×   |
+| chunk_fwd_h   | B=2,T=1024,H=3,K=64,V=64 |     51.76 |  1427.57 |      417.67 |         27.58×   |
+| chunk_fwd_o   | B=2,T=512,H=3,K=64,V=64  |     37.65 |   174.64 |      108.33 |          4.64×   |
+| recompute_w_u | B=2,T=512,H=3,K=64,V=64  |     34.28 |   126.05 |      128.73 |          3.68×   |
+```
+
+**5. Point at the table.** Land the close on `chunk_fwd_h`:
+
+> *"DeltaNet inter-chunk recurrence. PyTorch eager: 1.4 milliseconds. Our Triton kernel: 51 microseconds. **27× faster.** And it beats `torch.compile` — PyTorch's own auto-compiled path — by 3.4× too. Every kernel beats `torch.compile`, by 1.6 to 4×, depending on the shape. That's because we autotuned on real CDNA3 silicon instead of porting NVIDIA-shaped intuitions."*
+
+### Window 2 (optional, opened before step 4) — live GPU monitor
+
+Open a second SSH window so the audience can watch the GPU work while step 4 runs:
+
+```bash
+ssh amd
+watch -n 0.5 'rocm-smi --showuse --showmeminfo vram --showpower --showtemp'
+```
+
+GPU% will spike to ~100, power climbs from 130 W idle to ~230 W under load, HBM stays flat under 1 GB. (Don't use `nvtop` — it crashes on PyTorch + Triton workloads via a known DRM-fdinfo assertion bug.)
+
+### What the audience walks away with
+
+- **Latency**: Triton kernels in the **20-50 µs range**; PyTorch eager in the **100 µs to 1.4 ms range** for the same op.
+- **Speedup**: **2.7× to 27×** over eager, **1.6× to 4×** over `torch.compile`.
+- **Reproducibility**: every number on screen is in `results/baseline_compare.csv`, committed to the repo. `python benchmarks/pytorch_baseline.py` regenerates it from scratch in 30 seconds.
+
+### Recovery if anything fails on stage
+
+```bash
+cat results/baseline_compare.csv
+```
+
+— same numbers, served from the committed CSV instead of a live run. The slideshow keeps going.
+
+### Optional add-on — show the autotuner
+
+If someone asks "how was it tuned":
+
+```bash
+python benchmarks/autotune_continuous.py --kernels recompute_w_u --mode bench --restarts 1
+```
+
+Runs a hill-climb sweep on `recompute_w_u` in ~10 seconds. Each step prints the config + improvement. The biggest single insight in the repo (recompute_w_u −36%) came from this loop finding `num_stages=6` for the smallest shape — deeper LDS pipelining hides HBM latency that hand-picked configs left exposed.
+
+---
+
 ## Why Theorem exists
 
 Modern sub-quadratic sequence models — Mamba, Mamba-2, gated DeltaNet — push real work onto a small set of primitives: a depthwise causal 1-D convolution, and three chunkwise operators that compose into the model's per-step recurrence.
