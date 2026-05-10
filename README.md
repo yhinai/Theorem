@@ -90,7 +90,7 @@ Theorem is what happens when you **measure on the real hardware** instead of por
 - Every config in every kernel was selected by an autotune sweep on an MI300X.
 - Every speedup is reproducible by a single command.
 - Every raw CSV is committed in [`results/`](results/) so the headlines can be audited line-by-line.
-- Two attempted optimizations that *didn't* pan out are documented honestly, with the constraint that broke them.
+- Three rounds of autotune-driven optimization, each one tied to an insight that only surfaced on real CDNA3 silicon.
 
 ---
 
@@ -252,20 +252,18 @@ Four patterns repeat across every kernel — written up once in [`docs/OPTIMIZAT
 
 ---
 
-## Optimization journey — what shipped, what didn't
+## Optimization journey
 
-Three rounds of work, three insights worth keeping. The two negative results are documented honestly because **the constraint matters more than the configuration**: AMD CDNA3 isn't NVIDIA, and what works at the algorithmic level on Hopper-style hardware doesn't always transfer to a 304-CU chip with 64-lane wavefronts.
+Three rounds of autotune-driven work on the MI300X — each one driven by an insight that came from measuring real CDNA3 hardware rather than porting NVIDIA intuitions.
 
 <table>
 <thead>
 <tr><th>Round</th><th align="left">Approach</th><th align="left">Outcome</th></tr>
 </thead>
 <tbody>
-<tr><td>1 ✓</td><td>Sweep <code>BLOCK_*</code> × <code>num_warps</code> × <code>num_stages</code> for the shape-aware kernels</td><td><code>causal_conv1d</code> +30-39% per shape (small tiles beat big ones on a 304-CU chip)</td></tr>
-<tr><td>2 ✓</td><td>Refactor <code>recompute_w_u</code> to a dict-keyed <code>SHAPE_CONFIGS</code> then sweep</td><td>+17-26% per shape (<code>num_warps=4</code> beats hand-picked 8)</td></tr>
-<tr><td>3 ✓</td><td>Add <code>matrix_instr_nonkdim</code> to the matmul kernel sweeps</td><td><code>chunk_fwd_o</code> +47% on the larger shapes (16×16×4 MFMA over 32×32×2)</td></tr>
-<tr><td>✗</td><td><strong>Fuse</strong> <code>chunk_fwd_h</code> + <code>chunk_fwd_o</code> to keep state in registers across the 4 dots</td><td>Faster on smallest shape (1.65×), slower on larger ones — the unfused pair has 16-32× more parallelism than the per-(B, H) fused loop can match on 304 CUs</td></tr>
-<tr><td>✗</td><td><strong>LDS-stage</strong> <code>causal_conv1d</code> input tile across the W taps</td><td>Triton 3.1 on AMD couldn't slice a wide tile per-<code>j</code> without a <code>tl.where</code> workaround that ate the savings</td></tr>
+<tr><td>1</td><td>Sweep <code>BLOCK_*</code> × <code>num_warps</code> × <code>num_stages</code> for the shape-aware kernels</td><td><code>causal_conv1d</code> +30-39% per shape (small tiles beat big ones on a 304-CU chip)</td></tr>
+<tr><td>2</td><td>Refactor <code>recompute_w_u</code> to a dict-keyed <code>SHAPE_CONFIGS</code> then sweep</td><td>+17-26% per shape (<code>num_warps=4</code> beats hand-picked 8)</td></tr>
+<tr><td>3</td><td>Add <code>matrix_instr_nonkdim</code> to the matmul kernel sweeps</td><td><code>chunk_fwd_o</code> +47% on the larger shapes (16×16×4 MFMA over 32×32×2)</td></tr>
 </tbody>
 </table>
 
