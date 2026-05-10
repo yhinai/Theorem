@@ -139,39 +139,56 @@ Raw data: [`results/sweep_20260510_192629.csv`](../results/sweep_20260510_192629
 
 ### 3.1 `causal_conv1d` — depthwise causal 1D convolution
 
+Configs autotuned per shape. Insight: this kernel is memory-bound, so small
+`(BLOCK_S=64, BLOCK_D=16)` tiles win because they expose more programs across
+the 304 CUs than fewer-big-tiles does. Hand-picked configs (`BLOCK_S=256,
+BLOCK_D=64`) were left ~30-39% on the table.
+
 | Shape `(B, D, S, W)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 1536, 2048, 4) | 71.60 | 36.40 | **1.97×** |
-| (1, 2560, 2048, 4) | 93.01 | 50.68 | **1.84×** |
-| (1, 2560, 4096, 4) | 128.45 | 67.87 | **1.89×** |
-| **geomean** | **95.5** | **50.3** | **1.90×** |
+| (1, 1536, 2048, 4) | 73.45 | 33.92 | **2.17×** |
+| (1, 2560, 2048, 4) | 90.49 | 32.83 | **2.76×** |
+| (1, 2560, 4096, 4) | 129.98 | 49.51 | **2.63×** |
+| **geomean** | **95.3** | **38.1** | **2.51×** |
 
 ### 3.2 `chunk_fwd_h` — gated DeltaNet inter-chunk state recurrence
 
+Per-shape `num_warps`/`num_stages` autotuned (small wins of 0–4% — original
+hand-picked configs were near-optimal). The wide range of speedups reflects
+how much faster the Triton kernel scales than an eager Python-loop reference
+as `T` grows.
+
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 111.41 | 26.86 | **4.15×** |
-| (2, 512, 3, 64, 64) | 770.20 | 36.28 | **21.23×** |
-| (2, 1024, 3, 64, 64) | 1531.13 | 58.81 | **26.03×** |
-| **geomean** | **414.0** | **38.2** | **13.18×** |
+| (1, 64, 1, 64, 64) | 126.85 | 24.74 | **5.13×** |
+| (2, 512, 3, 64, 64) | 789.64 | 44.62 | **17.70×** |
+| (2, 1024, 3, 64, 64) | 1481.45 | 55.97 | **26.47×** |
+| **geomean** | **526.5** | **39.2** | **13.40×** |
 
 ### 3.3 `chunk_fwd_o` — gated DeltaNet chunkwise output
 
+Hand-picked configs were optimal in the 9-config sweep — no autotune-driven
+change.
+
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 161.81 | 47.47 | **3.41×** |
-| (2, 512, 3, 64, 64) | 208.92 | 71.88 | **2.91×** |
-| (2, 1024, 3, 64, 64) | 190.19 | 67.35 | **2.82×** |
-| **geomean** | **184.8** | **60.8** | **3.04×** |
+| (1, 64, 1, 64, 64) | 154.47 | 44.50 | **3.47×** |
+| (2, 512, 3, 64, 64) | 188.91 | 68.88 | **2.74×** |
+| (2, 1024, 3, 64, 64) | 189.47 | 69.68 | **2.72×** |
+| **geomean** | **177.0** | **60.0** | **2.96×** |
 
 ### 3.4 `recompute_w_u` — gated DeltaNet WY-transform recompute
 
+Persistent-blocked launch with hardcoded `num_warps=8`, `num_stages=2`,
+`GROUP_SIZE=8`. Sweep wired in a follow-up — current numbers are with the
+hand-picked CDNA3 defaults.
+
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 92.41 | 46.71 | **1.98×** |
-| (2, 512, 3, 64, 64) | 137.88 | 50.92 | **2.71×** |
-| (2, 1024, 3, 64, 64) | 154.91 | 46.71 | **3.32×** |
-| **geomean** | **124.4** | **47.9** | **2.61×** |
+| (1, 64, 1, 64, 64) | 85.31 | 42.18 | **2.02×** |
+| (2, 512, 3, 64, 64) | 127.05 | 45.78 | **2.77×** |
+| (2, 1024, 3, 64, 64) | 128.13 | 47.83 | **2.68×** |
+| **geomean** | **112.0** | **45.2** | **2.47×** |
 
 ### 3.5 Sanity check — vs `torch.compile(mode="max-autotune-no-cudagraphs")`
 
@@ -180,10 +197,22 @@ itself emits Triton-AMD code under the hood) on every shape:
 
 | Kernel | Geomean speedup over `torch.compile` |
 |---|---:|
-| `causal_conv1d` | **2.21×** |
-| `chunk_fwd_h` | **4.04×** |
-| `chunk_fwd_o` | **1.59×** |
-| `recompute_w_u` | **2.04×** |
+| `causal_conv1d` | **2.50×** |
+| `chunk_fwd_h` | **4.13×** |
+| `chunk_fwd_o` | **1.64×** |
+| `recompute_w_u` | **2.11×** |
+
+### 3.6 Reproducing the autotune
+
+```bash
+# On the MI300X box (single VF, ROCm 7.x, PyTorch ROCm 6.2):
+python benchmarks/autotune.py --kernels all --mode bench
+# writes results/autotune_<kernel>.json + results/autotune_summary.csv
+# total wall time on a 304-CU MI300X VF: ~110s for 192 configs.
+
+python benchmarks/pytorch_baseline.py
+# writes results/baseline_compare.csv with Triton vs eager vs torch.compile.
+```
 
 ---
 

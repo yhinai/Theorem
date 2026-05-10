@@ -140,10 +140,12 @@ SHAPE_CONFIGS: Dict[Tuple[int, int, int, int], dict] = {
     (1, 256, 256, 3):  {"BLOCK_S": 128, "BLOCK_D": 32, "num_warps": 4, "num_stages": 2},
     (1, 128, 64, 8):   {"BLOCK_S": 64,  "BLOCK_D": 32, "num_warps": 4, "num_stages": 2},
     (4, 64, 128, 4):   {"BLOCK_S": 64,  "BLOCK_D": 32, "num_warps": 4, "num_stages": 2},
-    # Benchmarks (large).
-    (1, 1536, 2048, 4): {"BLOCK_S": 256, "BLOCK_D": 64, "num_warps": 8, "num_stages": 2},
-    (1, 2560, 2048, 4): {"BLOCK_S": 256, "BLOCK_D": 64, "num_warps": 8, "num_stages": 2},
-    (1, 2560, 4096, 4): {"BLOCK_S": 256, "BLOCK_D": 64, "num_warps": 8, "num_stages": 2},
+    # Benchmarks (large) -- autotuned on MI300X (results/autotune_summary.csv).
+    # Insight: this kernel is memory-bound; small tiles (64 x 16) win because
+    # they expose more programs across the 304 CUs than fewer big tiles do.
+    (1, 1536, 2048, 4): {"BLOCK_S": 64, "BLOCK_D": 16, "num_warps": 4, "num_stages": 1},
+    (1, 2560, 2048, 4): {"BLOCK_S": 64, "BLOCK_D": 16, "num_warps": 8, "num_stages": 2},
+    (1, 2560, 4096, 4): {"BLOCK_S": 64, "BLOCK_D": 16, "num_warps": 8, "num_stages": 3},
 }
 
 

@@ -1,0 +1,342 @@
+{
+  "kernel": "causal_conv1d",
+  "configs_tested": 171,
+  "by_shape": {
+    "B=1, D=1536, S=2048, W=4, seed=2146": {
+      "shape_key": [
+        1,
+        1536,
+        2048,
+        4
+      ],
+      "baseline_us": 39.12999853491783,
+      "best": {
+        "config": {
+          "BLOCK_S": 64,
+          "BLOCK_D": 16,
+          "num_warps": 4,
+          "num_stages": 1
+        },
+        "min_us": 27.382999658584595
+      },
+      "all_ok": [
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 4,
+            "num_stages": 1
+          },
+          "min_us": 27.382999658584595
+        },
+        {
+          "config": {
+            "BLOCK_S": 128,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 3
+          },
+          "min_us": 28.46500091254711
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 8,
+            "num_stages": 2
+          },
+          "min_us": 28.504999354481697
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 3
+          },
+          "min_us": 29.025999829173088
+        },
+        {
+          "config": {
+            "BLOCK_S": 128,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 2
+          },
+          "min_us": 29.146000742912292
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 32,
+            "num_warps": 8,
+            "num_stages": 3
+          },
+          "min_us": 29.347000643610954
+        },
+        {
+          "config": {
+            "BLOCK_S": 128,
+            "BLOCK_D": 32,
+            "num_warps": 8,
+            "num_stages": 1
+          },
+          "min_us": 29.70699965953827
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 32,
+            "num_warps": 16,
+            "num_stages": 3
+          },
+          "min_us": 30.229000374674797
+        },
+        {
+          "config": {
+            "BLOCK_S": 512,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 2
+          },
+          "min_us": 30.629999935626984
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 1
+          },
+          "min_us": 30.911000445485115
+        }
+      ],
+      "n_failed": 0,
+      "first_failure": null
+    },
+    "B=1, D=2560, S=2048, W=4, seed=3129": {
+      "shape_key": [
+        1,
+        2560,
+        2048,
+        4
+      ],
+      "baseline_us": 49.47200044989586,
+      "best": {
+        "config": {
+          "BLOCK_S": 64,
+          "BLOCK_D": 16,
+          "num_warps": 8,
+          "num_stages": 2
+        },
+        "min_us": 30.388999730348587
+      },
+      "all_ok": [
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 8,
+            "num_stages": 2
+          },
+          "min_us": 30.388999730348587
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 32,
+            "num_warps": 16,
+            "num_stages": 2
+          },
+          "min_us": 30.750000849366188
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 2
+          },
+          "min_us": 30.869999900460243
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 1
+          },
+          "min_us": 31.070999801158905
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 32,
+            "num_warps": 16,
+            "num_stages": 3
+          },
+          "min_us": 31.63199871778488
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 8,
+            "num_stages": 1
+          },
+          "min_us": 32.19300135970116
+        },
+        {
+          "config": {
+            "BLOCK_S": 256,
+            "BLOCK_D": 16,
+            "num_warps": 4,
+            "num_stages": 1
+          },
+          "min_us": 33.195000141859055
+        },
+        {
+          "config": {
+            "BLOCK_S": 128,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 3
+          },
+          "min_us": 33.43699872493744
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 8,
+            "num_stages": 3
+          },
+          "min_us": 33.83700177073479
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 3
+          },
+          "min_us": 33.87700021266937
+        }
+      ],
+      "n_failed": 0,
+      "first_failure": null
+    },
+    "B=1, D=2560, S=4096, W=4, seed=54352": {
+      "shape_key": [
+        1,
+        2560,
+        4096,
+        4
+      ],
+      "baseline_us": 64.8680031299591,
+      "best": {
+        "config": {
+          "BLOCK_S": 64,
+          "BLOCK_D": 16,
+          "num_warps": 8,
+          "num_stages": 3
+        },
+        "min_us": 44.78200152516365
+      },
+      "all_ok": [
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 8,
+            "num_stages": 3
+          },
+          "min_us": 44.78200152516365
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 8,
+            "num_stages": 2
+          },
+          "min_us": 46.9059981405735
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 1
+          },
+          "min_us": 47.387998551130295
+        },
+        {
+          "config": {
+            "BLOCK_S": 256,
+            "BLOCK_D": 16,
+            "num_warps": 8,
+            "num_stages": 2
+          },
+          "min_us": 47.42800071835518
+        },
+        {
+          "config": {
+            "BLOCK_S": 256,
+            "BLOCK_D": 16,
+            "num_warps": 4,
+            "num_stages": 3
+          },
+          "min_us": 47.62899875640869
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 2
+          },
+          "min_us": 48.02900180220604
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 16,
+            "num_stages": 3
+          },
+          "min_us": 48.069000244140625
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 32,
+            "num_warps": 16,
+            "num_stages": 1
+          },
+          "min_us": 48.39000105857849
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 16,
+            "num_warps": 8,
+            "num_stages": 1
+          },
+          "min_us": 48.63100126385689
+        },
+        {
+          "config": {
+            "BLOCK_S": 64,
+            "BLOCK_D": 32,
+            "num_warps": 16,
+            "num_stages": 3
+          },
+          "min_us": 48.91199991106987
+        }
+      ],
+      "n_failed": 0,
+      "first_failure": null
+    }
+  }
+}

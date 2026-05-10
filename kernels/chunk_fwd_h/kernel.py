@@ -42,9 +42,9 @@ SHAPE_CONFIGS = {
     (1, 64, 1, 64, 64):    {"num_warps": 8, "num_stages": 3},
     (2, 128, 4, 64, 64):   {"num_warps": 4, "num_stages": 3},
     (1, 256, 4, 64, 128):  {"num_warps": 4, "num_stages": 3},
-    # benchmarks
+    # benchmarks (autotuned on MI300X -- see results/autotune_summary.csv)
     (1, 64, 1, 64, 64):    {"num_warps": 8, "num_stages": 3},  # noqa: F601
-    (2, 512, 3, 64, 64):   {"num_warps": 4, "num_stages": 3},
+    (2, 512, 3, 64, 64):   {"num_warps": 4, "num_stages": 1},  # +3.9% vs num_stages=3
     (2, 1024, 3, 64, 64):  {"num_warps": 4, "num_stages": 3},
 }
 
