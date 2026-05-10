@@ -129,9 +129,15 @@ GRIDS: dict[str, GridSpec] = {
         },
         apply_fn=apply_chunk_fwd_o,
     ),
-    # recompute_w_u uses a list-shaped SHAPE_CONFIGS plus hardcoded launch
-    # args; it needs a different sweep strategy (regex-patch the launch line).
-    # Skipping it in this pass — it's already at 2.61x reference speedup.
+    "recompute_w_u": GridSpec(
+        name="recompute_w_u",
+        grid={
+            "num_warps": [4, 8, 16],
+            "num_stages": [1, 2, 3],
+            "GROUP_SIZE": [4, 8, 16],
+        },
+        apply_fn=apply_recompute_w_u,
+    ),
 }
 
 

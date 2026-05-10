@@ -46,20 +46,20 @@ speedup is across the kernel's three benchmark shapes (full per-shape table in
 
 | Kernel | Math (sketch) | CDNA3-aware optimization | Reference (µs, geomean) | Optimized (µs, geomean) | Speedup |
 | --- | --- | --- | ---: | ---: | ---: |
-| `causal_conv1d` | Depthwise 1D causal convolution `y[t,c] = Σ_k w[k,c] · x[t-k,c]` (used in Mamba / Mamba-2-style architectures). | Block sized to whole 64-lane wavefronts; **autotuned `BLOCK_S × BLOCK_D` per shape** — small (64×16) tiles win because they expose more programs across the 304 CUs than fewer big tiles do for this memory-bound op. | 95.3 | 38.1 | **2.51×** |
-| `gated_deltanet_chunk_fwd_h` | Inter-chunk recurrence `S_{c+1} = G_c · S_c + K_cᵀ V_c` over fixed-size chunks (gated DeltaNet, arXiv:2412.06464). | State `S` pinned in registers across the chunk-step loop; `tl.dot` mapped to Matrix Cores; per-shape `num_warps`/`num_stages` autotuned. | 526.5 | 39.2 | **13.40×** |
-| `gated_deltanet_chunk_fwd_o` | Chunkwise output `O_c = (Q_c K_cᵀ ⊙ M) V_c + Q_c S_c` (local causal attention plus global state read). | Two `tl.dot` blocks share one Q tile in registers; causal mask materialized at compile time per `BT`; state read coalesced from HBM3e through LDS. | 177.0 | 60.0 | **2.96×** |
-| `gated_deltanet_recompute_w_u` | Recomputes the WY-transform helpers `W = β · (I − tril(K Kᵀ)·β)⁻¹` and `U` used by the backward pass. | Two `tl.dot` matmuls per chunk (the matmul reformulation); persistent-blocked program scheduling; L2 reordering. | 112.0 | 45.2 | **2.47×** |
+| `causal_conv1d` | Depthwise 1D causal convolution `y[t,c] = Σ_k w[k,c] · x[t-k,c]` (used in Mamba / Mamba-2-style architectures). | Block sized to whole 64-lane wavefronts; **autotuned `BLOCK_S × BLOCK_D` per shape** — small (64×16) tiles win because they expose more programs across the 304 CUs than fewer big tiles do for this memory-bound op. | 96.1 | 39.4 | **2.41×** |
+| `gated_deltanet_chunk_fwd_h` | Inter-chunk recurrence `S_{c+1} = G_c · S_c + K_cᵀ V_c` over fixed-size chunks (gated DeltaNet, arXiv:2412.06464). | State `S` pinned in registers across the chunk-step loop; `tl.dot` mapped to Matrix Cores; per-shape `num_warps`/`num_stages` autotuned. | 480.6 | 40.1 | **12.52×** |
+| `gated_deltanet_chunk_fwd_o` | Chunkwise output `O_c = (Q_c K_cᵀ ⊙ M) V_c + Q_c S_c` (local causal attention plus global state read). | Two `tl.dot` blocks share one Q tile in registers; causal mask materialized at compile time per `BT`; state read coalesced from HBM3e through LDS. | 172.3 | 61.7 | **2.80×** |
+| `gated_deltanet_recompute_w_u` | Recomputes the WY-transform helpers `W = β · (I − tril(K Kᵀ)·β)⁻¹` and `U` used by the backward pass. | Two `tl.dot` matmuls per chunk; persistent-blocked program scheduling; L2 reordering; **autotuned `num_warps` / `num_stages` / `GROUP_SIZE` per shape** — `num_warps=4` (vs the hand-picked 8) wins on every shape. | 119.7 | 35.1 | **3.40×** |
 
 The Triton kernels also outperform `torch.compile(mode="max-autotune-no-cudagraphs")`
-on every shape — by **1.64× to 4.13×** geomean (full data:
+on every shape — by **1.57× to 4.27×** geomean (full data:
 [`results/baseline_compare.csv`](results/baseline_compare.csv),
 [`results/autotune_summary.csv`](results/autotune_summary.csv)).
 
 > Configs were swept via `python benchmarks/autotune.py --kernels all --mode bench`
-> on the MI300X. The biggest tuning win was on `causal_conv1d` (+30-39% per
-> shape over hand-picked configs); the gated DeltaNet kernels were within
-> 4% of optimal already.
+> on the MI300X. Biggest wins:
+> - `causal_conv1d`: +30-39% per shape (small tiles beat big tiles for memory-bound ops on 304 CUs)
+> - `recompute_w_u`: +17-26% per shape (`num_warps=4 × 64-lane wavefronts = 256` threads/CTA, exactly right for the 64×64 MFMA tile)
 
 ---
 

@@ -39,7 +39,7 @@ from .reference import BT, Data
 # -----------------------------------------------------------------------------
 # Shape configs (consumed by harness + autotuner if present).
 # -----------------------------------------------------------------------------
-SHAPE_CONFIGS = [
+SHAPE_LIST = [
     {"B": 1, "T": 64,   "H": 2, "K": 64, "V": 64},
     {"B": 2, "T": 128,  "H": 4, "K": 64, "V": 64},
     {"B": 1, "T": 256,  "H": 4, "K": 64, "V": 128},
@@ -47,6 +47,24 @@ SHAPE_CONFIGS = [
     {"B": 2, "T": 512,  "H": 3, "K": 64, "V": 64},
     {"B": 2, "T": 1024, "H": 3, "K": 64, "V": 64},
 ]
+
+
+# Per-shape launch configs, keyed by (B, T, H, K, V).
+# Anything not in this dict falls through to the defaults at the launch site.
+# Bench-shape entries autotuned on MI300X (results/autotune_summary.csv); test-shape
+# entries inherit the same insight (num_warps=4 + GROUP_SIZE=16 dominates on CDNA3
+# because num_warps=4 x 64-lane wavefronts = 256 threads/CTA — exactly right for
+# the 64x64 MFMA tile).
+SHAPE_CONFIGS: dict[tuple, dict] = {
+    # tests
+    (1, 64, 2, 64, 64):    {"num_warps": 4, "num_stages": 3, "GROUP_SIZE": 16},
+    (2, 128, 4, 64, 64):   {"num_warps": 4, "num_stages": 3, "GROUP_SIZE": 16},
+    (1, 256, 4, 64, 128):  {"num_warps": 4, "num_stages": 3, "GROUP_SIZE": 16},
+    # benchmarks (autotuned)
+    (1, 64, 1, 64, 64):    {"num_warps": 4, "num_stages": 3, "GROUP_SIZE": 16},  # +21.3%
+    (2, 512, 3, 64, 64):   {"num_warps": 4, "num_stages": 3, "GROUP_SIZE": 16},  # +17.1%
+    (2, 1024, 3, 64, 64):  {"num_warps": 4, "num_stages": 2, "GROUP_SIZE": 8},   # +26.5%
+}
 
 
 # -----------------------------------------------------------------------------
@@ -189,7 +207,9 @@ def _launch(k: torch.Tensor, v: torch.Tensor, beta: torch.Tensor,
     # Persistent launch sizing: cap at NUM_TILES so we don't spawn idle programs.
     # MI300X has 304 CUs; 304 is a sensible upper bound for the persistent grid.
     NUM_PROGS = min(NUM_TILES, 304)
-    GROUP_SIZE = 8  # L2-friendly grouping; tuned for MI300X 4 MB L2.
+
+    cfg = SHAPE_CONFIGS.get((B, T, H, K, V), {"num_warps": 8, "num_stages": 2, "GROUP_SIZE": 8})
+    GROUP_SIZE = int(cfg["GROUP_SIZE"])
 
     grid = (NUM_PROGS,)
 
@@ -215,8 +235,8 @@ def _launch(k: torch.Tensor, v: torch.Tensor, beta: torch.Tensor,
         BT_C=BT,
         GROUP_SIZE=GROUP_SIZE,
         NUM_PROGS=NUM_PROGS,
-        num_warps=8,
-        num_stages=2,
+        num_warps=int(cfg["num_warps"]),
+        num_stages=int(cfg["num_stages"]),
     )
     return w, u
 

@@ -146,10 +146,10 @@ BLOCK_D=64`) were left ~30-39% on the table.
 
 | Shape `(B, D, S, W)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 1536, 2048, 4) | 73.45 | 33.92 | **2.17×** |
-| (1, 2560, 2048, 4) | 90.49 | 32.83 | **2.76×** |
-| (1, 2560, 4096, 4) | 129.98 | 49.51 | **2.63×** |
-| **geomean** | **95.3** | **38.1** | **2.51×** |
+| (1, 1536, 2048, 4) | 74.45 | 33.20 | **2.24×** |
+| (1, 2560, 2048, 4) | 89.32 | 37.17 | **2.40×** |
+| (1, 2560, 4096, 4) | 130.34 | 50.23 | **2.59×** |
+| **geomean** | **96.1** | **39.4** | **2.41×** |
 
 ### 3.2 `chunk_fwd_h` — gated DeltaNet inter-chunk state recurrence
 
@@ -160,10 +160,10 @@ as `T` grows.
 
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 126.85 | 24.74 | **5.13×** |
-| (2, 512, 3, 64, 64) | 789.64 | 44.62 | **17.70×** |
-| (2, 1024, 3, 64, 64) | 1481.45 | 55.97 | **26.47×** |
-| **geomean** | **526.5** | **39.2** | **13.40×** |
+| (1, 64, 1, 64, 64) | 118.75 | 31.35 | **3.79×** |
+| (2, 512, 3, 64, 64) | 747.26 | 40.97 | **18.24×** |
+| (2, 1024, 3, 64, 64) | 1434.59 | 50.43 | **28.44×** |
+| **geomean** | **480.6** | **40.1** | **12.52×** |
 
 ### 3.3 `chunk_fwd_o` — gated DeltaNet chunkwise output
 
@@ -172,23 +172,26 @@ change.
 
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 154.47 | 44.50 | **3.47×** |
-| (2, 512, 3, 64, 64) | 188.91 | 68.88 | **2.74×** |
-| (2, 1024, 3, 64, 64) | 189.47 | 69.68 | **2.72×** |
-| **geomean** | **177.0** | **60.0** | **2.96×** |
+| (1, 64, 1, 64, 64) | 153.35 | 47.51 | **3.23×** |
+| (2, 512, 3, 64, 64) | 185.78 | 67.75 | **2.74×** |
+| (2, 1024, 3, 64, 64) | 178.73 | 71.68 | **2.49×** |
+| **geomean** | **172.3** | **61.7** | **2.80×** |
 
 ### 3.4 `recompute_w_u` — gated DeltaNet WY-transform recompute
 
-Persistent-blocked launch with hardcoded `num_warps=8`, `num_stages=2`,
-`GROUP_SIZE=8`. Sweep wired in a follow-up — current numbers are with the
-hand-picked CDNA3 defaults.
+Persistent-blocked launch. Per-shape `num_warps`, `num_stages`, and `GROUP_SIZE`
+autotuned over a 27-config grid. Insight: `num_warps=4` (vs the hand-picked 8)
+wins on every shape — `num_warps=4 × 64-lane wavefronts = 256 threads/CTA`,
+exactly the size of the 64×64 MFMA tile, so the warps are perfectly utilized
+without idle lanes. `GROUP_SIZE=16` also helps the small/medium shapes by
+broadening the L2-friendly tile-reorder window. Improvement +17-26% per shape.
 
 | Shape `(B, T, H, K, V)` | Reference (µs) | Optimized (µs) | Speedup |
 |---|---:|---:|---:|
-| (1, 64, 1, 64, 64) | 85.31 | 42.18 | **2.02×** |
-| (2, 512, 3, 64, 64) | 127.05 | 45.78 | **2.77×** |
-| (2, 1024, 3, 64, 64) | 128.13 | 47.83 | **2.68×** |
-| **geomean** | **112.0** | **45.2** | **2.47×** |
+| (1, 64, 1, 64, 64) | 98.30 | 23.25 | **4.23×** |
+| (2, 512, 3, 64, 64) | 126.57 | 42.14 | **3.00×** |
+| (2, 1024, 3, 64, 64) | 137.03 | 44.22 | **3.10×** |
+| **geomean** | **119.7** | **35.1** | **3.40×** |
 
 ### 3.5 Sanity check — vs `torch.compile(mode="max-autotune-no-cudagraphs")`
 
@@ -197,10 +200,10 @@ itself emits Triton-AMD code under the hood) on every shape:
 
 | Kernel | Geomean speedup over `torch.compile` |
 |---|---:|
-| `causal_conv1d` | **2.50×** |
-| `chunk_fwd_h` | **4.13×** |
-| `chunk_fwd_o` | **1.64×** |
-| `recompute_w_u` | **2.11×** |
+| `causal_conv1d` | **2.87×** |
+| `chunk_fwd_h` | **4.27×** |
+| `chunk_fwd_o` | **1.57×** |
+| `recompute_w_u` | **2.74×** |
 
 ### 3.6 Reproducing the autotune
 

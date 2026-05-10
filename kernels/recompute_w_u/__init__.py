@@ -5,7 +5,7 @@ Exports:
     ref_kernel(data)    -> (w, u)   — pure PyTorch reference
 """
 
-from .kernel import custom_kernel, SHAPE_CONFIGS
+from .kernel import custom_kernel, SHAPE_CONFIGS, SHAPE_LIST
 from .reference import ref_kernel, generate_data, Data, BT
 
 __all__ = [
@@ -15,4 +15,5 @@ __all__ = [
     "Data",
     "BT",
     "SHAPE_CONFIGS",
+    "SHAPE_LIST",
 ]
