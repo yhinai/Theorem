@@ -1,0 +1,14 @@
+description: Depthwise causal 1D convolution. Used in Mamba-2-style architectures.
+                Each channel is convolved independently with W-tap kernel and causal (left) zero-padding.
+shapes:
+  tests:
+    - {B: 1, D: 64, S: 64, W: 4, seed: 4242}
+    - {B: 2, D: 128, S: 128, W: 4, seed: 5236}
+    - {B: 1, D: 256, S: 256, W: 3, seed: 1001}
+    - {B: 1, D: 128, S: 64, W: 8, seed: 5531}
+    - {B: 4, D: 64, S: 128, W: 4, seed: 9173}
+  benchmarks:
+    - {B: 1, D: 1536, S: 2048, W: 4, seed: 2146}
+    - {B: 1, D: 2560, S: 2048, W: 4, seed: 3129}
+    - {B: 1, D: 2560, S: 4096, W: 4, seed: 54352}
+tolerances: {rtol: 1.0e-2, atol: 1.0e-2}

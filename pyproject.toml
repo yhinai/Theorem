@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "theorem"
+version = "0.1.0"
+description = "AMD MI300X-optimized GPU kernels (CDNA3, Triton AMD backend)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "yhinai" },
+]
+keywords = ["amd", "mi300x", "cdna3", "rocm", "triton", "gpu", "kernels"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "torch>=2.5,<2.7",
+    "triton>=3.1",
+    "numpy>=1.26",
+    "pyyaml>=6.0",
+]
+
+[project.urls]
+Repository = "https://github.com/yhinai/Theorem"
+
+[tool.setuptools]
+packages = []

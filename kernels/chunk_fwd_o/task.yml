@@ -1,0 +1,41 @@
+description: |
+  Gated DeltaNet chunkwise output (forward, o) for AMD MI300X (CDNA3, ROCm).
+
+  Combines per-chunk local causal attention with a global state contribution:
+
+      o = scale * (local_attention + global_state)
+
+  where:
+      local_attention[b, h, t, v] = sum_{s <= t in chunk} (q[t] dot k[s]) * v_gated[s]
+      global_state[b, h, t, v]    = q_gated[t] dot h[chunk_idx]
+      q_gated = q * exp(g_at_t)
+      v_gated = v * exp(diff_in_chunk)
+
+  Inputs:
+    q:     [B, T, H, K]   float32 (queries)
+    k:     [B, T, H, K]   float32 (keys)
+    v:     [B, T, H, V]   float32 (values)
+    g:     [B, T, H]      float32 (cumulative gate)
+    h:     [B, NT, H, K, V] float32 (inter-chunk state from chunk_fwd_h)
+    scale: float                   (typically 1/sqrt(K))
+
+  Output:
+    o: [B, T, H, V] float32
+
+  Per chunk (BT = 64), four dot products are fused in a single Triton (AMD backend)
+  kernel pass, keeping the [64, 64] qk tile in registers / LDS:
+    1) qk        = q_chunk @ k_chunk.T                   [64, K] x [K, 64]  -> [64, 64]
+    2) local_out = causal_mask(qk) @ v_gated_chunk       [64, 64] x [64, V] -> [64, V]
+    3) global    = q_gated @ h[chunk_idx]                [64, K] x [K, V]   -> [64, V]
+    4) o_chunk   = scale * (local_out + global)
+
+shapes:
+  tests:
+    - {B: 1, T: 64,  H: 1, K: 64, V: 64,  seed: 4242}
+    - {B: 2, T: 128, H: 4, K: 64, V: 64,  seed: 5236}
+    - {B: 1, T: 256, H: 4, K: 64, V: 128, seed: 1001}
+  benchmarks:
+    - {B: 1, T: 64,   H: 1, K: 64, V: 64, seed: 31232}
+    - {B: 2, T: 512,  H: 3, K: 64, V: 64, seed: 4052}
+    - {B: 2, T: 1024, H: 3, K: 64, V: 64, seed: 2146}
+tolerances: {rtol: 1.0e-2, atol: 1.0e-2}

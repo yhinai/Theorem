@@ -1,0 +1,7 @@
+# NOTE: torch must be the ROCm wheel for AMD Instinct MI300X (gfx942).
+# Install via:
+#   pip install -r requirements.txt --index-url https://download.pytorch.org/whl/rocm6.2
+torch>=2.5,<2.7
+triton>=3.1
+numpy>=1.26
+pyyaml>=6.0

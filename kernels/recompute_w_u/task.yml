@@ -1,0 +1,50 @@
+name: recompute_w_u
+description: |
+  Gated DeltaNet WY-transform recompute of (w, u) on AMD MI300X.
+
+  Per chunk of BT = 64 timesteps, this kernel computes:
+
+      u = A @ (v * beta[:, None])                         # [64, V]
+      w = A @ (k * (beta * exp(g))[:, None])              # [64, K]
+
+  where A is the per-chunk WY representation matrix produced upstream from
+  k k^T plus a triangular solve (the gated DeltaNet WY transform). Folding
+  beta and exp(g) into the inputs reduces the body of the kernel to two
+  pure GEMMs of shape [64, 64] x [64, K] and [64, 64] x [64, V] per
+  (batch, head, chunk), which map directly onto MI300X CDNA3 Matrix Cores
+  via MFMA instructions issued by Triton's AMD backend.
+
+  This is one of three forward-pass kernels for gated DeltaNet
+  (paper: arXiv:2412.06464). Rather than persisting (w, u) as activations,
+  the model RECOMPUTES them from (k, v, beta, A, g) — the classic
+  memory-vs-compute tradeoff: trade a couple of small GEMMs for not
+  having to keep two large [B, T, H, K/V] tensors live across the
+  forward/backward boundary.
+
+  Inputs:
+    k:    [B, T, H, K]  float32  keys
+    v:    [B, T, H, V]  float32  values
+    beta: [B, T, H]     float32  gating coefficient
+    A:    [B, T, H, BT] float32  WY representation matrix per chunk
+    g:    [B, T, H]     float32  cumulative gate (chunk-local)
+
+  Outputs:
+    w:    [B, T, H, K]  float32
+    u:    [B, T, H, V]  float32
+
+  Constants:
+    BT = 64  (chunk length)
+
+shapes:
+  tests:
+    - {B: 1, T: 64,  H: 2, K: 64, V: 64,  seed: 4242}
+    - {B: 2, T: 128, H: 4, K: 64, V: 64,  seed: 5236}
+    - {B: 1, T: 256, H: 4, K: 64, V: 128, seed: 1001}
+  benchmarks:
+    - {B: 1, T: 64,   H: 1, K: 64, V: 64, seed: 31232}
+    - {B: 2, T: 512,  H: 3, K: 64, V: 64, seed: 4052}
+    - {B: 2, T: 1024, H: 3, K: 64, V: 64, seed: 2146}
+
+tolerances:
+  rtol: 1.0e-2
+  atol: 1.0e-2

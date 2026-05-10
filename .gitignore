@@ -1,0 +1,35 @@
+# ─── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+env/
+.env
+.python-version
+
+# ─── Build artifacts ───────────────────────────────────────
+build/
+dist/
+*.egg-info/
+*.egg
+
+# ─── Editor / OS ───────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# ─── Kernel build artifacts ────────────────────────────────
+*.hsaco
+.triton/
+.triton/cache/
+
+# ─── Benchmark outputs ─────────────────────────────────────
+# Allow the results directory to exist (tracked via .gitkeep)
+# but keep CSV outputs at the repo root out of git.
+/*.csv
+results/*
+!results/.gitkeep
