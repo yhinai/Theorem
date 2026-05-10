@@ -197,50 +197,6 @@ Before getting to the gated-DeltaNet kernels, here's the smallest possible illus
 
 </div>
 
-### The model
-
-```python
-import torch
-import torch.nn as nn
-
-class TinyMLP(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.fc1 = nn.Linear(3, 4)   # 3*4 + 4 = 16 params
-        self.fc2 = nn.Linear(4, 3)   # 4*3 + 3 = 15 params
-        #                              total   = 31 params
-
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        return self.fc2(x)
-
-model = TinyMLP().eval()
-```
-
-### One inference call over 3 tokens
-
-```python
-# Three "tokens" — three 3-dim input vectors stacked into a [3, 3] tensor.
-tokens = torch.tensor([
-    [ 1.0,  0.5, -0.3],   # token 0
-    [ 0.2,  0.8,  0.1],   # token 1
-    [-0.5,  0.3,  0.9],   # token 2
-])
-
-with torch.no_grad():
-    out = model(tokens)   # shape [3, 3]
-
-print(out)
-```
-
-Expected output (your numbers will differ because the weights are randomly initialized):
-
-```
-tensor([[ 0.142,  0.318, -0.077],
-        [ 0.205,  0.241, -0.012],
-        [ 0.103,  0.359, -0.158]])
-```
-
 ### Every computation, one by one
 
 Per token `x = [x₀, x₁, x₂]`, every arithmetic op that PyTorch actually executes:
