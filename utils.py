@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import random
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable
@@ -27,13 +28,26 @@ def set_seed(seed: int) -> None:
 
 
 def verbose_allclose(
-    received: torch.Tensor,
-    expected: torch.Tensor,
+    received,
+    expected,
     rtol: float,
     atol: float,
     max_print: int = 5,
 ) -> list[str]:
-    """Return a list of human-readable mismatch reasons. Empty list = pass."""
+    """Return a list of human-readable mismatch reasons. Empty list = pass.
+
+    Tuples/lists of tensors are compared element-wise.
+    """
+    if isinstance(received, (tuple, list)) or isinstance(expected, (tuple, list)):
+        if type(received) is not type(expected) or len(received) != len(expected):
+            return [f"container mismatch: received={type(received).__name__}({len(received) if hasattr(received, '__len__') else '?'}), "
+                    f"expected={type(expected).__name__}({len(expected) if hasattr(expected, '__len__') else '?'})"]
+        out: list[str] = []
+        for i, (r, e) in enumerate(zip(received, expected)):
+            for reason in verbose_allclose(r, e, rtol=rtol, atol=atol, max_print=max_print):
+                out.append(f"[{i}] {reason}")
+        return out
+
     reasons: list[str] = []
     if not isinstance(received, torch.Tensor) or not isinstance(expected, torch.Tensor):
         reasons.append(f"type mismatch: received={type(received)}, expected={type(expected)}")
@@ -112,21 +126,27 @@ def load_task(kernel_dir: Path) -> dict:
 
 
 def import_kernel(kernel_dir: Path) -> tuple[Callable, Callable]:
-    """Dynamically import (custom_kernel, ref_kernel) from <kernel_dir>/__init__.py.
+    """Import (custom_kernel, ref_kernel) from kernels/<name>/.
 
-    Done lazily and via importlib so the harness modules can be imported even
-    when the kernel source has not been authored yet.
+    The kernel modules contain relative imports (``from .kernel import ...``),
+    so we resolve them as a real package. The ``kernels/`` parent is added
+    to ``sys.path`` (idempotent) and the module is imported by dotted name.
     """
+    import importlib
+
     kernel_dir = Path(kernel_dir).resolve()
     init_file = kernel_dir / "__init__.py"
     if not init_file.exists():
         raise FileNotFoundError(f"missing __init__.py at {init_file}")
-    mod_name = f"_kernel_{kernel_dir.name}"
-    spec = importlib.util.spec_from_file_location(mod_name, init_file)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"could not build import spec for {init_file}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+
+    project_root = kernel_dir.parent.parent  # parent of "kernels/"
+    sys_path_entry = str(project_root)
+    if sys_path_entry not in sys.path:
+        sys.path.insert(0, sys_path_entry)
+
+    dotted = f"kernels.{kernel_dir.name}"
+    module = importlib.import_module(dotted)
+
     custom = getattr(module, "custom_kernel", None)
     ref = getattr(module, "ref_kernel", None)
     if custom is None or ref is None:

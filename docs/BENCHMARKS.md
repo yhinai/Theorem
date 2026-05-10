@@ -116,55 +116,93 @@ utilization (`% memory busy`).
 
 ## 3. Results
 
-All cells `<pending>` until populated by a real run.
+Measured on AMD Instinct MI300X VF (gfx942), single virtual function visible to PyTorch.
+Shapes match `kernels/<name>/task.yml` exactly. All correctness checks pass at `rtol=1e-2, atol=1e-2`.
+Inputs are float32 (matching task spec); fp32 accumulators on the Matrix Cores.
+
+Raw CSV: `results/sweep_20260510_192629.csv`.
 
 ### 3.1 causal_conv1d
 
-Depthwise 1D causal convolution, `W = 4`, fp16 inputs.
+Depthwise 1D causal convolution. 5/5 test shapes pass correctness.
 
-| Shape `(B, T, D)` | min_us    | p50_us    | mean_us   | status    |
-|-------------------|-----------|-----------|-----------|-----------|
-| (1, 2048, 1024)   | <pending> | <pending> | <pending> | <pending> |
-| (1, 4096, 2048)   | <pending> | <pending> | <pending> | <pending> |
-| (1, 8192, 2048)   | <pending> | <pending> | <pending> | <pending> |
-| (4, 2048, 2048)   | <pending> | <pending> | <pending> | <pending> |
-| (4, 4096, 4096)   | <pending> | <pending> | <pending> | <pending> |
+**Tests** (correctness, max\|diff\|):
+
+| Shape `(B, D, S, W)` | max\|diff\| | status |
+|---|---:|---|
+| (1, 64, 64, 4) | 9.5e-7 | PASS |
+| (2, 128, 128, 4) | 1.9e-6 | PASS |
+| (1, 256, 256, 3) | 9.5e-7 | PASS |
+| (1, 128, 64, 8) | 1.9e-6 | PASS |
+| (4, 64, 128, 4) | 9.5e-7 | PASS |
+
+**Benchmarks** (5 warmup + 50 timed iters):
+
+| Shape `(B, D, S, W)` | min_us | p50_us | mean_us |
+|---|---:|---:|---:|
+| (1, 1536, 2048, 4) | **28.18** | 30.75 | 32.01 |
+| (1, 2560, 2048, 4) | **33.80** | 34.08 | 34.73 |
+| (1, 2560, 4096, 4) | **49.55** | 50.55 | 51.17 |
 
 ### 3.2 chunk_fwd_h
 
-Gated DeltaNet inter-chunk state recurrence, bf16 inputs, fp32 MFMA accum.
+Gated DeltaNet inter-chunk state recurrence. 3/3 test shapes pass correctness.
 
-| Shape `(B, H, T, D_k, D_v)` | min_us | p50_us | mean_us | status |
-|-----------------------------|--------|--------|---------|--------|
-| (1, 8, 2048, 64, 128)       | <pending> | <pending> | <pending> | <pending> |
-| (1, 16, 4096, 64, 128)      | <pending> | <pending> | <pending> | <pending> |
-| (1, 16, 8192, 128, 128)     | <pending> | <pending> | <pending> | <pending> |
-| (4, 16, 4096, 128, 256)     | <pending> | <pending> | <pending> | <pending> |
-| (4, 32, 8192, 128, 256)     | <pending> | <pending> | <pending> | <pending> |
+**Tests:**
+
+| Shape `(B, T, H, K, V)` | max\|diff\| | status |
+|---|---:|---|
+| (1, 64, 1, 64, 64) | 3.6e-7 | PASS |
+| (2, 128, 4, 64, 64) | 7.2e-7 | PASS |
+| (1, 256, 4, 64, 128) | 1.4e-6 | PASS |
+
+**Benchmarks:**
+
+| Shape `(B, T, H, K, V)` | min_us | p50_us | mean_us |
+|---|---:|---:|---:|
+| (1, 64, 1, 64, 64) | **35.08** | 39.29 | 41.08 |
+| (2, 512, 3, 64, 64) | **28.51** | 35.48 | 39.70 |
+| (2, 1024, 3, 64, 64) | **35.40** | 35.60 | 36.53 |
 
 ### 3.3 chunk_fwd_o
 
-Gated DeltaNet chunkwise output, bf16 inputs, fp32 MFMA accum, single-pass.
+Gated DeltaNet chunkwise output (4 dots per block, single-pass). 3/3 test shapes pass.
 
-| Shape `(B, H, T, D_k, D_v)` | min_us | p50_us | mean_us | status |
-|-----------------------------|--------|--------|---------|--------|
-| (1, 8, 2048, 64, 128)       | <pending> | <pending> | <pending> | <pending> |
-| (1, 16, 4096, 64, 128)      | <pending> | <pending> | <pending> | <pending> |
-| (1, 16, 8192, 128, 128)     | <pending> | <pending> | <pending> | <pending> |
-| (4, 16, 4096, 128, 256)     | <pending> | <pending> | <pending> | <pending> |
-| (4, 32, 8192, 128, 256)     | <pending> | <pending> | <pending> | <pending> |
+**Tests:**
+
+| Shape `(B, T, H, K, V)` | max\|diff\| | status |
+|---|---:|---|
+| (1, 64, 1, 64, 64) | 1.7e-5 | PASS |
+| (2, 128, 4, 64, 64) | 1.5e-5 | PASS |
+| (1, 256, 4, 64, 128) | 1.9e-5 | PASS |
+
+**Benchmarks:**
+
+| Shape `(B, T, H, K, V)` | min_us | p50_us | mean_us |
+|---|---:|---:|---:|
+| (1, 64, 1, 64, 64) | **36.44** | 40.57 | 42.19 |
+| (2, 512, 3, 64, 64) | **39.73** | 40.81 | 43.11 |
+| (2, 1024, 3, 64, 64) | **43.22** | 44.38 | 45.69 |
 
 ### 3.4 recompute_w_u
 
-Gated DeltaNet WY-transform recompute (two GEMMs per chunk), bf16 inputs.
+Gated DeltaNet WY-transform recompute (two GEMMs per chunk). 3/3 test shapes pass.
 
-| Shape `(B, H, T, C, D_k, D_v)` | min_us | p50_us | mean_us | status |
-|--------------------------------|--------|--------|---------|--------|
-| (1, 8, 2048, 64, 64, 128)      | <pending> | <pending> | <pending> | <pending> |
-| (1, 16, 4096, 64, 64, 128)     | <pending> | <pending> | <pending> | <pending> |
-| (1, 16, 8192, 64, 128, 128)    | <pending> | <pending> | <pending> | <pending> |
-| (4, 16, 4096, 64, 128, 256)    | <pending> | <pending> | <pending> | <pending> |
-| (4, 32, 8192, 64, 128, 256)    | <pending> | <pending> | <pending> | <pending> |
+**Tests:**
+
+| Shape `(B, T, H, K, V)` | status |
+|---|---|
+| (1, 64, 2, 64, 64) | PASS |
+| (2, 128, 4, 64, 64) | PASS |
+| (1, 256, 4, 64, 128) | PASS |
+
+**Benchmarks:**
+
+| Shape `(B, T, H, K, V)` | min_us | p50_us | mean_us |
+|---|---:|---:|---:|
+| (1, 64, 1, 64, 64) | **34.88** | 37.45 | 38.38 |
+| (2, 512, 3, 64, 64) | **40.81** | 43.06 | 44.47 |
+| (2, 1024, 3, 64, 64) | **36.16** | 41.37 | 42.40 |
 
 ---
 

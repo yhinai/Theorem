@@ -65,10 +65,12 @@ def _load_inputs(kernel_dir: Path, shape_kwargs: dict) -> Any:
     ref_path = Path(kernel_dir).resolve() / "reference.py"
     if not ref_path.exists():
         raise FileNotFoundError(f"missing reference.py at {ref_path}")
-    spec = importlib.util.spec_from_file_location(f"_ref_{Path(kernel_dir).name}", ref_path)
+    mod_name = f"_ref_{Path(kernel_dir).name}"
+    spec = importlib.util.spec_from_file_location(mod_name, ref_path)
     if spec is None or spec.loader is None:
         raise ImportError(f"could not load spec for {ref_path}")
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = mod  # required so @dataclass / typing work during exec
     spec.loader.exec_module(mod)
     gen = getattr(mod, "generate_input", None)
     if gen is None:
@@ -98,9 +100,8 @@ def run_tests(kernel_dir: Path) -> tuple[int, int]:
             set_seed(int(shape.get("seed", DEFAULT_SEED)))
             with DeterministicContext():
                 data = _load_inputs(kernel_dir, {k: v for k, v in shape.items() if k != "name"})
-                args = data if isinstance(data, (tuple, list)) else (data,)
-                expected = ref_kernel(*args)
-                received = custom_kernel(*args)
+                expected = ref_kernel(data)
+                received = custom_kernel(data)
             reasons = verbose_allclose(received, expected, rtol=rtol, atol=atol)
             if not reasons:
                 print(f"  PASS  {label}")
@@ -150,8 +151,7 @@ def run_benchmarks(kernel_dir: Path) -> None:
         try:
             set_seed(int(shape.get("seed", DEFAULT_SEED)))
             data = _load_inputs(kernel_dir, {k: v for k, v in shape.items() if k != "name"})
-            args = data if isinstance(data, (tuple, list)) else (data,)
-            mean_us, p50_us, min_us = _time_kernel(custom_kernel, args)
+            mean_us, p50_us, min_us = _time_kernel(custom_kernel, (data,))
             print(f"  {label:<48} {mean_us:>10.2f} {p50_us:>10.2f} {min_us:>10.2f}")
         except Exception as exc:  # noqa: BLE001
             print(f"  {label:<48} ERROR: {type(exc).__name__}: {exc}")

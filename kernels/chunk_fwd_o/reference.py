@@ -140,3 +140,7 @@ def ref_kernel(data: Dict[str, Any]) -> torch.Tensor:
                 o[b, t0:t1, ht, :] = scale * (local_out + global_out)
 
     return o
+
+
+# Harness alias
+generate_input = _build_inputs

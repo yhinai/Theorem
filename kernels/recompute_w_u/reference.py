@@ -147,3 +147,7 @@ def ref_kernel(data: Data) -> tuple[torch.Tensor, torch.Tensor]:
     u = u_c.permute(0, 1, 3, 2, 4).reshape(B, T, H, V).contiguous()
     w = w_c.permute(0, 1, 3, 2, 4).reshape(B, T, H, K).contiguous()
     return w, u
+
+
+# Harness alias
+generate_input = generate_data
