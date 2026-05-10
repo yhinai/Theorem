@@ -28,15 +28,16 @@ def generate_input(B: int, T: int, H: int, K: int, V: int, seed: int):
     """
     assert T % CHUNK_SIZE == 0, f"T={T} must be a multiple of CHUNK_SIZE={CHUNK_SIZE}"
 
-    gen = torch.Generator(device="cpu").manual_seed(int(seed))
+    device = "cuda:0"
+    gen = torch.Generator(device=device).manual_seed(int(seed))
 
-    k = torch.randn(B, T, H, K, generator=gen, dtype=torch.float32) * 0.5
-    v = torch.randn(B, T, H, V, generator=gen, dtype=torch.float32) * 0.5
+    k = torch.randn(B, T, H, K, generator=gen, dtype=torch.float32, device=device) * 0.5
+    v = torch.randn(B, T, H, V, generator=gen, dtype=torch.float32, device=device) * 0.5
 
     # Per-position gate increment: small negative, plus a tiny noise.
     # Cumsum within each chunk so g[chunk_end] is the chunk's total decay.
     g_inc = (
-        -0.05 * torch.rand(B, T, H, generator=gen, dtype=torch.float32)
+        -0.05 * torch.rand(B, T, H, generator=gen, dtype=torch.float32, device=device)
         - 0.005
     )
     NT = T // CHUNK_SIZE

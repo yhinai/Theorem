@@ -52,24 +52,19 @@ def generate_input(
     return x, weight, bias
 
 
-def ref_kernel(
-    x: torch.Tensor,
-    weight: torch.Tensor,
-    bias: torch.Tensor,
-) -> torch.Tensor:
+def ref_kernel(data) -> torch.Tensor:
     """Reference depthwise causal 1D conv.
 
     Implemented via `F.pad` (causal left zero-pad of width W-1) and `F.conv1d`
     with `groups=D`, which matches the math above exactly.
 
     Args:
-        x:      [B, D, S] float32.
-        weight: [D, W]    float32.
-        bias:   [D]       float32.
+        data: tuple `(x, weight, bias)` returned by `generate_input`.
 
     Returns:
         out: [B, D, S] float32.
     """
+    x, weight, bias = data
     B, D, S = x.shape
     Dw, W = weight.shape
     assert D == Dw, f"channel mismatch: x has D={D}, weight has D={Dw}"

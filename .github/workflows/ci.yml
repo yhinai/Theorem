@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  syntax:
+    name: syntax + lint (no GPU)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: install minimal deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml numpy ruff
+
+      - name: parse all python sources
+        run: |
+          python - <<'PY'
+          import ast, pathlib, sys
+          fails = []
+          for p in pathlib.Path('.').rglob('*.py'):
+              try:
+                  ast.parse(p.read_text())
+              except SyntaxError as e:
+                  fails.append(f"{p}: {e}")
+          if fails:
+              for f in fails: print(f)
+              sys.exit(1)
+          print("all .py files parse cleanly")
+          PY
+
+      - name: validate task.yml across kernels
+        run: |
+          python - <<'PY'
+          import yaml, pathlib, sys
+          required = {"shapes", "tolerances"}
+          for tf in pathlib.Path('kernels').glob('*/task.yml'):
+              data = yaml.safe_load(tf.read_text())
+              missing = required - data.keys()
+              if missing:
+                  print(f"{tf}: missing keys {missing}"); sys.exit(1)
+              if not data['shapes'].get('tests') or not data['shapes'].get('benchmarks'):
+                  print(f"{tf}: needs shapes.tests + shapes.benchmarks"); sys.exit(1)
+              print(f"{tf}: OK ({len(data['shapes']['tests'])} tests, {len(data['shapes']['benchmarks'])} benches)")
+          PY
+
+      - name: ruff (style only, do not block)
+        continue-on-error: true
+        run: ruff check --output-format=github .
+
+  benchmark:
+    name: GPU benchmark (manual, requires AMD self-hosted runner)
+    runs-on: [self-hosted, linux, amd-mi300x]
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup ROCm env
+        run: bash scripts/setup_env.sh
+
+      - name: smoke test
+        run: |
+          source .venv/bin/activate
+          python scripts/run_amd.py
+
+      - name: full sweep
+        run: |
+          source .venv/bin/activate
+          python run_sweep.py --mode both
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sweep-results
+          path: results/sweep_*.csv
