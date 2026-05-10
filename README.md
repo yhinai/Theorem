@@ -1,86 +1,194 @@
-# Theorem — AMD MI300X-optimized GPU kernels
+<div align="center">
 
-> CDNA3-tuned Triton kernels for transformer-relevant ops: causal 1D convolution and gated DeltaNet chunkwise primitives, written for the AMD Instinct MI300X.
+# Theorem
 
-Theorem is a focused collection of GPU kernels hand-tuned for AMD's CDNA3
-architecture. The goal is unapologetically narrow: take a small set of ops that
-sit on the hot path of modern sub-quadratic sequence models (Mamba/Mamba-2,
-gated DeltaNet) and squeeze them on the MI300X. No generality, no portability
-shims — just kernels that know exactly what hardware they are running on.
+**AMD Instinct MI300X-optimized GPU kernels for transformer-relevant ops.**
 
----
+CDNA3-tuned Triton kernels for causal 1-D convolution and the gated DeltaNet
+chunkwise primitives. Hand-tuned, autotune-swept, and reproducible end-to-end
+on a single MI300X.
 
-## Hardware target
+[Demo](#demo)&nbsp;·&nbsp;[Slides](assets/theorem_slides.pdf)&nbsp;·&nbsp;[Benchmarks](docs/BENCHMARKS.md)&nbsp;·&nbsp;[Optimizations](docs/OPTIMIZATIONS.md)&nbsp;·&nbsp;[Architecture](docs/ARCHITECTURE.md)
 
-| Property | Value |
-| --- | --- |
-| Device | AMD Instinct MI300X |
-| Architecture | CDNA3 (`gfx942`) |
-| Compute Units | 304 |
-| Wavefront width | 64 lanes |
-| Memory | ~192 GB HBM3e |
-| Stack | ROCm 7.x, HIP, Triton (AMD backend) |
-
-All kernels assume `gfx942` and ROCm 7.x. Earlier ROCm versions are not
-supported and will not be backported.
+</div>
 
 ---
 
-## Tooling
+## Headline
 
-- **PyTorch + ROCm** — host-side tensor management and reference implementations.
-- **Triton (AMD backend)** — kernel authoring; emits HIP-compatible binaries
-  through the AMD backend in upstream Triton ≥ 3.1.
-- **NumPy** — small numerical reference utilities and offline analysis.
-- **PyYAML** — per-shape autotune configuration files.
+Geomean speedups vs PyTorch eager fp32 across each kernel's three benchmark shapes on a single AMD Instinct MI300X (gfx942). Full per-shape numbers and methodology in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+
+<div align="center">
+
+| `causal_conv1d` | `chunk_fwd_h` | `chunk_fwd_o` | `recompute_w_u` |
+|:---:|:---:|:---:|:---:|
+| **2.73×** | **12.42×** | **4.51×** | **2.96×** |
+
+</div>
+
+The same kernels also outperform `torch.compile(mode="max-autotune-no-cudagraphs")` — which itself emits Triton-AMD code — by **2.34× to 4.10× geomean**.
 
 ---
 
-## Kernel inventory — reference vs optimized
+## Demo
 
-Measured on AMD Instinct MI300X. **Reference** is the PyTorch eager implementation
-(`F.conv1d`, eager DeltaNet matmul/einsum loops). **Optimized** is the Triton
-kernel in this repo. Both are min-of-50-iter microbenchmarks at fp32. Geomean
-speedup is across the kernel's three benchmark shapes (full per-shape table in
-[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md)).
+<div align="center">
 
-| Kernel | Math (sketch) | CDNA3-aware optimization | Reference (µs, geomean) | Optimized (µs, geomean) | Speedup |
-| --- | --- | --- | ---: | ---: | ---: |
-| `causal_conv1d` | Depthwise 1D causal convolution `y[t,c] = Σ_k w[k,c] · x[t-k,c]` (used in Mamba / Mamba-2-style architectures). | Block sized to whole 64-lane wavefronts; **autotuned `BLOCK_S × BLOCK_D` per shape** — small (64×16) tiles win because they expose more programs across the 304 CUs than fewer big tiles do for this memory-bound op. | 95.0 | 34.6 | **2.73×** |
-| `gated_deltanet_chunk_fwd_h` | Inter-chunk recurrence `S_{c+1} = G_c · S_c + K_cᵀ V_c` over fixed-size chunks (gated DeltaNet, arXiv:2412.06464). | State `S` pinned in registers across the chunk-step loop; `tl.dot` mapped to Matrix Cores; per-shape `num_warps` / `num_stages` / `matrix_instr_nonkdim` autotuned. | 489.9 | 39.4 | **12.42×** |
-| `gated_deltanet_chunk_fwd_o` | Chunkwise output `O_c = (Q_c K_cᵀ ⊙ M) V_c + Q_c S_c` (local causal attention plus global state read). | Two `tl.dot` blocks share one Q tile in registers; causal mask materialized at compile time; **autotuned MFMA tile via `matrix_instr_nonkdim=16`** — picks 16×16×4 fp32 MFMA over 32×32×2 because the 16-lane M/N-dim better matches the 64×64 chunk geometry. The biggest single tuning win in the repo (+47% on the larger shapes). | 192.7 | 42.7 | **4.51×** |
-| `gated_deltanet_recompute_w_u` | Recomputes the WY-transform helpers `W = β · (I − tril(K Kᵀ)·β)⁻¹` and `U` used by the backward pass. | Two `tl.dot` matmuls per chunk; persistent-blocked program scheduling; L2 reordering; **autotuned `num_warps` / `num_stages` / `GROUP_SIZE` / `matrix_instr_nonkdim` per shape** — `num_warps=4` (vs the hand-picked 8) wins on every shape. | 124.4 | 42.1 | **2.96×** |
+<video src="https://github.com/yhinai/Theorem/raw/main/assets/demo.mp4" controls width="720">
+  Your browser does not display the video. Download it:
+  <a href="assets/demo.mp4">assets/demo.mp4</a>.
+</video>
 
-The Triton kernels also outperform `torch.compile(mode="max-autotune-no-cudagraphs")`
-on every shape — by **2.34× to 4.10×** geomean (full data:
-[`results/baseline_compare.csv`](results/baseline_compare.csv),
-[`results/autotune_summary.csv`](results/autotune_summary.csv)).
+[▶ Watch / Download `assets/demo.mp4`](assets/demo.mp4)
 
-> Configs were swept via `python benchmarks/autotune.py --kernels all --mode bench`
-> on the MI300X. Biggest wins, ordered:
-> - `chunk_fwd_o`: +47% on the larger shapes (`num_warps=16 → 4` + `matrix_instr_nonkdim=16`)
-> - `causal_conv1d`: +30-39% per shape (small tiles beat big tiles for memory-bound ops on 304 CUs)
-> - `recompute_w_u`: +17-26% per shape (`num_warps=4 × 64-lane wavefronts = 256` threads/CTA, exactly right for the 64×64 MFMA tile)
->
-> Two optimizations were attempted and **didn't ship**:
-> 1. **Fused `chunk_fwd_h + chunk_fwd_o`** (kept in branch history). Faster on the smallest shape (1.65×) but slower on the larger ones — the unfused pair has 16-32× more parallelism (`B·H·NT·V/BV` programs) than a fused per-(B,H) loop can match on 304 CUs. The HBM saving on `h` (~6 MB) didn't beat the parallelism loss.
-> 2. **LDS-staged `causal_conv1d`** (load full input tile once, reuse across W taps). Triton 3.1 on AMD couldn't slice a wide tile per-`j` without a `tl.where` workaround that added more ALU work than the HBM saving recovered. Reverted.
+</div>
+
+---
+
+## Slides
+
+[`assets/theorem_slides.pdf`](assets/theorem_slides.pdf) — the talk-track companion with the architecture diagram and per-kernel optimization breakdowns.
+
+---
+
+## What this is
+
+Theorem is a deliberately narrow collection of GPU kernels: take a small set of ops on the hot path of modern sub-quadratic sequence models (Mamba/Mamba-2, gated DeltaNet) and squeeze them on the MI300X. No generality, no portability shims — just kernels that know exactly what hardware they are running on.
+
+The optimization story is **measured, not asserted.** Every config in every kernel was chosen by an autotune sweep on the actual hardware, every speedup number on this page is reproducible by `python benchmarks/autotune.py && python benchmarks/pytorch_baseline.py`, and the raw CSVs are committed in [`results/`](results/).
+
+---
+
+## Hardware & software target
+
+<div align="center">
+
+| Hardware | | Software |
+|---|---|---|
+| Device | AMD Instinct MI300X | PyTorch + ROCm 6.2 wheels |
+| Architecture | CDNA3 (`gfx942`) | Triton ≥ 3.1 (AMD backend) |
+| Compute units | 304 | NumPy, PyYAML |
+| Wavefront | 64 lanes | ROCm 7.x runtime |
+| Memory | ~192 GB HBM3e | Python ≥ 3.11 |
+
+</div>
+
+Earlier ROCm versions are not supported and will not be backported.
+
+---
+
+## Kernel inventory
+
+<table>
+<thead>
+<tr>
+  <th>Kernel</th>
+  <th>What it does</th>
+  <th>Reference (µs)</th>
+  <th>Optimized (µs)</th>
+  <th>Speedup</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>causal_conv1d</code></td>
+  <td>Depthwise 1D causal convolution. Used in Mamba / Mamba-2-style architectures. Memory-bound; small <code>(64×16)</code> tiles win because they expose more programs across the 304 CUs than fewer big tiles do.</td>
+  <td align="right">95.0</td>
+  <td align="right">34.6</td>
+  <td align="right"><strong>2.73×</strong></td>
+</tr>
+<tr>
+  <td><code>chunk_fwd_h</code></td>
+  <td>Gated DeltaNet inter-chunk recurrence <code>S<sub>c+1</sub> = G<sub>c</sub>·S<sub>c</sub> + K<sub>c</sub><sup>T</sup>V<sub>c</sub></code>. State pinned in registers across the chunk loop; <code>tl.dot</code> mapped to Matrix Cores.</td>
+  <td align="right">489.9</td>
+  <td align="right">39.4</td>
+  <td align="right"><strong>12.42×</strong></td>
+</tr>
+<tr>
+  <td><code>chunk_fwd_o</code></td>
+  <td>Gated DeltaNet chunkwise output (local causal attention + global state). The biggest single tuning win: <code>num_warps=16→4</code> + <code>matrix_instr_nonkdim=16</code> picks the 16×16×4 fp32 MFMA shape that matches the 64×64 chunk geometry.</td>
+  <td align="right">192.7</td>
+  <td align="right">42.7</td>
+  <td align="right"><strong>4.51×</strong></td>
+</tr>
+<tr>
+  <td><code>recompute_w_u</code></td>
+  <td>Gated DeltaNet WY-transform recompute (two GEMMs per chunk). Persistent-blocked launch, L2 reordering, autotuned <code>num_warps=4</code>: 4 × 64-lane wavefronts = 256 threads/CTA — exactly right for the 64×64 MFMA tile.</td>
+  <td align="right">124.4</td>
+  <td align="right">42.1</td>
+  <td align="right"><strong>2.96×</strong></td>
+</tr>
+</tbody>
+</table>
+
+Full per-shape tables with min / p50 / mean and the comparison against `torch.compile`: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
 
 ---
 
 ## Quick start
 
 ```bash
-git clone https://github.com/yhinai/Theorem.git && cd Theorem
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-bash scripts/setup_env.sh
-python eval.py test kernels/causal_conv1d/
+git clone https://github.com/yhinai/Theorem.git
+cd Theorem
+bash scripts/setup_env.sh        # creates .venv, installs torch (ROCm 6.2 wheels), triton, deps
+source .venv/bin/activate
+python scripts/run_amd.py        # smoke-test all four kernels on the smallest test shape
 ```
 
-The PyTorch wheel must be the **ROCm** build — see `requirements.txt` for the
-correct `--index-url`. `scripts/setup_env.sh` sets the ROCm and Triton
-environment variables that the evaluator and sweeper expect.
+Expected output: four `PASS` lines and a one-line GPU banner.
+
+---
+
+## Optimization principles
+
+Four patterns repeat across every kernel — written up once in [`docs/OPTIMIZATIONS.md`](docs/OPTIMIZATIONS.md), summarized here.
+
+- **Wavefront-aware block sizing.** Block sizes are multiples of 64 along the contiguous axis. The classic NVIDIA "more warps = faster" intuition is wrong on CDNA3: `num_warps=16` over-subscribes (1024 threads/CTA) when the 64×64 MFMA tile only needs 256.
+- **LDS pipelining via `num_stages`.** Inner-reduction loops set `num_stages ≥ 2` so the next tile's HBM3e load overlaps the current tile's MFMA. Per-shape autotuned — too high pressures LDS, too low serializes memory.
+- **MFMA tile shape (`matrix_instr_nonkdim`).** The AMD backend's MFMA selector. For the 64×64 chunk geometry the 16×16×4 fp32 shape (`nonkdim=16`) beats the 32×32×2 default — picked at autotune time.
+- **Per-shape configuration tuning.** Configs live in `SHAPE_CONFIGS` dicts at module load time. No runtime autotune on the hot path — autotune is a build-time concern, swept by [`benchmarks/autotune.py`](benchmarks/autotune.py).
+
+---
+
+## Optimization journey — what shipped, what didn't
+
+Three rounds of work, three insights worth keeping:
+
+| Round | Approach | Outcome |
+|---|---|---|
+| 1 | Sweep `BLOCK_*` × `num_warps` × `num_stages` for all shape-aware kernels | ✅ `causal_conv1d` +30-39% per shape (small tiles beat big ones) |
+| 2 | Refactor `recompute_w_u` to a dict-keyed `SHAPE_CONFIGS` then sweep | ✅ +17-26% per shape (`num_warps=4` beats hand-picked 8) |
+| 3 | Add `matrix_instr_nonkdim` to the matmul kernel sweeps | ✅ `chunk_fwd_o` +47% on the larger shapes |
+| ✗ | **Fuse `chunk_fwd_h + chunk_fwd_o`** to keep `h` in registers across the 4 dots | Faster on smallest shape (1.65×), slower on larger ones — the unfused pair has 16-32× more parallelism than the per-(B,H) fused loop |
+| ✗ | **LDS-stage `causal_conv1d`** input tile across the W taps | Triton 3.1 on AMD couldn't slice a wide tile per-`j` without a `tl.where` workaround that ate the savings |
+
+Both negative results are documented honestly because the *constraint* matters more than the *configuration*: AMD CDNA3 isn't NVIDIA, and what works at the algorithmic level on Hopper-style hardware doesn't always transfer to a 304-CU chip with 64-lane wavefronts.
+
+---
+
+## Reproducing the numbers
+
+```bash
+# Smoke test (smallest shape per kernel, ~5s):
+python scripts/run_amd.py
+
+# Per-kernel correctness + benchmark:
+python eval.py both kernels/causal_conv1d/
+
+# Cross-kernel sweep -> results/sweep_<timestamp>.csv:
+python run_sweep.py --mode both
+
+# Triton config autotune (writes results/autotune_*.json + summary.csv):
+python benchmarks/autotune.py --kernels all --mode bench
+
+# Triton vs PyTorch eager vs torch.compile (writes results/baseline_compare.csv):
+python benchmarks/pytorch_baseline.py
+
+# GPU telemetry during a run:
+bash scripts/monitor_gpu.sh /tmp/gpu_telemetry.csv &
+```
+
+Methodology, timing protocol, and tolerance constants live in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md). Raw outputs are committed under [`results/`](results/) so the headline numbers can be checked against the source data.
 
 ---
 
@@ -88,101 +196,42 @@ environment variables that the evaluator and sweeper expect.
 
 ```text
 Theorem/
-├── README.md
-├── LICENSE
-├── pyproject.toml
-├── requirements.txt
-├── eval.py
-├── utils.py
-├── run_sweep.py
-├── kernels/
+├── kernels/                       4 kernel modules (kernel.py + reference.py + task.yml + README.md)
 │   ├── causal_conv1d/
 │   ├── chunk_fwd_h/
 │   ├── chunk_fwd_o/
 │   └── recompute_w_u/
+├── benchmarks/
+│   ├── autotune.py                per-shape Triton config sweep
+│   ├── pytorch_baseline.py        Triton vs eager vs torch.compile
+│   └── apply_best_configs.py      writes best configs back into kernel.py
+├── eval.py                        single-kernel correctness + benchmark
+├── run_sweep.py                   cross-kernel correctness + benchmark sweep
+├── utils.py                       allclose / device probes / lazy import
 ├── scripts/
-│   ├── run_amd.py
-│   ├── monitor_gpu.sh
-│   ├── cpu_reference.py
-│   └── setup_env.sh
+│   ├── run_amd.py                 smoke-test all 4 kernels
+│   ├── monitor_gpu.sh             rocm-smi telemetry to CSV
+│   ├── cpu_reference.py           NumPy oracle for causal_conv1d
+│   └── setup_env.sh               one-shot ROCm venv + torch install
 ├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── OPTIMIZATIONS.md
-│   └── BENCHMARKS.md
-└── results/
-    └── .gitkeep
+│   ├── ARCHITECTURE.md            CDNA3 mental model + repo shape
+│   ├── OPTIMIZATIONS.md           per-kernel optimization deep-dive
+│   └── BENCHMARKS.md              methodology + per-shape result tables
+├── results/                       raw CSVs from runs (committed)
+├── assets/
+│   ├── demo.mp4                   the demo video at the top of this README
+│   └── theorem_slides.pdf         the slide deck
+└── .github/workflows/ci.yml       syntax + task.yml validation (no GPU runner yet)
 ```
 
-- `eval.py` — single entry point for correctness + microbenchmarks per kernel.
-- `utils.py` — shared helpers (timing, tolerance, device probes).
-- `run_sweep.py` — drives autotune sweeps across the per-shape config files.
-- `kernels/<name>/` — one directory per kernel: Triton source, reference op,
-  configuration YAML, and unit tests.
-- `scripts/run_amd.py` — orchestrates a full benchmark run on an MI300X host.
-- `scripts/monitor_gpu.sh` — wraps `rocm-smi` for power, clock, and HBM
-  occupancy traces during sweeps.
-- `scripts/cpu_reference.py` — NumPy reference oracles used to validate kernel
-  outputs against bitwise-stable expectations.
-- `scripts/setup_env.sh` — exports ROCm/Triton environment variables.
-- `docs/ARCHITECTURE.md` — CDNA3 mental model and how it shapes the kernels.
-- `docs/OPTIMIZATIONS.md` — the recurring optimization patterns, written up.
-- `docs/BENCHMARKS.md` — methodology, shapes covered, how to read the CSVs.
-- `results/` — benchmark CSV outputs (gitignored except `.gitkeep`).
-
 ---
 
-## Optimization principles applied
+## Citations
 
-These four patterns recur across every kernel in this repo. They are written
-down once so each kernel doesn't have to re-derive them.
-
-- **Wavefront-aware block sizing.** CDNA3 issues in 64-lane wavefronts. Triton
-  block sizes are picked so that the contiguous axis of every load and every
-  `tl.dot` is a multiple of 64 — never 32. Mismatched block shapes leave half
-  the wavefront idle and burn LDS bandwidth for no work.
-- **LDS pipelining via `num_stages`.** Every kernel that has an inner reduction
-  loop (chunk steps in `chunk_fwd_h`, K/V steps in `chunk_fwd_o`) sets
-  `num_stages ≥ 2` so the next tile's HBM3e load overlaps the current tile's
-  Matrix Core dot. The exact `num_stages` is per-shape — too high and we
-  pressure the LDS, too low and we serialize on memory.
-- **Fused dot-accumulate on Matrix Cores.** Reductions go through `tl.dot` with
-  `acc=` chaining so the AMD backend lowers them onto Matrix Core MFMA
-  instructions in fp16/bf16 with fp32 accumulate. Hand-rolled `tl.sum` over the
-  same axis is left as a sanity-check baseline only.
-- **Per-shape configuration tuning.** `BT`, `BK`, `BV`, `num_warps`,
-  `num_stages`, and waves-per-EU live in a YAML next to each kernel. The sweep
-  driver picks the best config per `(batch, heads, seqlen, head_dim)` tuple and
-  the kernel imports the chosen config at module-load time. No runtime
-  autotune on the hot path — autotune is a build-time concern.
-
-The full write-up of how each pattern manifests per kernel is in
-[`docs/OPTIMIZATIONS.md`](docs/OPTIMIZATIONS.md).
-
----
-
-## Reproducing benchmarks
-
-```bash
-bash scripts/monitor_gpu.sh results/gpu_trace.log &
-python scripts/run_amd.py --kernels all --out results/
-python run_sweep.py --kernel chunk_fwd_o --config kernels/chunk_fwd_o/configs.yaml
-```
-
-`scripts/run_amd.py` produces one CSV per kernel under `results/` with columns
-`shape, mean_ms, p50_ms, p99_ms, gbps, tflops`. The methodology — warmup count,
-clock locking, cache-flush pattern between iterations — is documented in
-[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
-
----
-
-## Citations & further reading
-
+- AMD MI300X architecture brief — <https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html>
 - ROCm documentation — <https://rocm.docs.amd.com/>
 - Triton AMD backend — <https://triton-lang.org/main/dialects/amdgpu.html>
-- Yang et al., *Gated Delta Networks: Improving Mamba2 with Delta Rule*,
-  arXiv:2412.06464 — <https://arxiv.org/abs/2412.06464>
-- AMD Instinct MI300X architecture brief —
-  <https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html>
+- Yang et al., *Gated Delta Networks: Improving Mamba2 with Delta Rule* (arXiv:2412.06464) — <https://arxiv.org/abs/2412.06464>
 
 ---
 
