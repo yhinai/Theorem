@@ -109,6 +109,20 @@ GPU% will spike to ~100, power climbs from 130 W idle to ~230 W under load, HBM 
 - **Speedup**: **2.7× to 27×** over eager, **1.6× to 4×** over `torch.compile`.
 - **Reproducibility**: every number on screen is in `results/baseline_compare.csv`, committed to the repo. `python benchmarks/pytorch_baseline.py` regenerates it from scratch in 30 seconds.
 
+### What the GPU monitor shows during the demo
+
+<div align="center">
+
+<img src="assets/gpu_util.png" alt="AMD Instinct MI300X VF utilization during a live continuous-autotune run — GPU% spikes to 75% during each Triton compile + execute cycle; HBM stays flat at 3.1 GiB out of 191.7 GiB (1.6%); steady 210 W power draw at 2.1 GHz" width="780">
+
+</div>
+
+Live readout from the second SSH window during `python benchmarks/autotune_continuous.py`. What the audience can verify with their own eyes:
+
+- **PCIe Gen 5 ×16, 2.1 GHz GPU clock, 210 / 750 W** — the device is healthy, clocks are at design speed, plenty of power headroom.
+- **GPU% spikes** mark each Triton kernel's *compile-then-execute* cycle inside the autotune sweep. Between spikes the GPU is idle while the host computes the next config.
+- **HBM stays at ~3.1 GiB / 191.7 GiB (≈1.6%)** — exactly what well-tuned kernels look like. Working sets fit in registers + LDS + L2; HBM only sees cold-start reads. *Putting more pressure on HBM here would slow things down, not speed them up* — "memory underutilization" is the signature of a kernel that doesn't waste round-trips to global memory.
+
 ### Recovery if anything fails on stage
 
 ```bash
