@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 360" width="540" height="360" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">
+  <style>
+    .node { fill: #ED1C24; stroke: #5a0000; stroke-width: 1.5; }
+    .edge { stroke: #888; stroke-width: 1; opacity: 0.45; }
+    .layer-label { font-size: 14px; fill: #222; text-anchor: middle; font-weight: 600; }
+    .param-label { font-size: 12px; fill: #555; text-anchor: middle; }
+    .activation { font-size: 11px; fill: #ED1C24; text-anchor: middle; font-weight: 600; }
+    .title-label { font-size: 13px; fill: #333; text-anchor: middle; }
+  </style>
+
+  <!-- Title at top -->
+  <text class="title-label" x="270" y="22">tiny MLP — 3 inputs → 4 hidden → 3 outputs · 31 parameters total</text>
+
+  <!-- Edges: 3 inputs (x=100, y=110/180/250) × 4 hidden (x=270, y=80/140/200/260) = 12 lines -->
+  <line class="edge" x1="100" y1="110" x2="270" y2="80"/>
+  <line class="edge" x1="100" y1="110" x2="270" y2="140"/>
+  <line class="edge" x1="100" y1="110" x2="270" y2="200"/>
+  <line class="edge" x1="100" y1="110" x2="270" y2="260"/>
+  <line class="edge" x1="100" y1="180" x2="270" y2="80"/>
+  <line class="edge" x1="100" y1="180" x2="270" y2="140"/>
+  <line class="edge" x1="100" y1="180" x2="270" y2="200"/>
+  <line class="edge" x1="100" y1="180" x2="270" y2="260"/>
+  <line class="edge" x1="100" y1="250" x2="270" y2="80"/>
+  <line class="edge" x1="100" y1="250" x2="270" y2="140"/>
+  <line class="edge" x1="100" y1="250" x2="270" y2="200"/>
+  <line class="edge" x1="100" y1="250" x2="270" y2="260"/>
+
+  <!-- Edges: 4 hidden × 3 outputs (x=440, y=110/180/250) = 12 lines -->
+  <line class="edge" x1="270" y1="80"  x2="440" y2="110"/>
+  <line class="edge" x1="270" y1="80"  x2="440" y2="180"/>
+  <line class="edge" x1="270" y1="80"  x2="440" y2="250"/>
+  <line class="edge" x1="270" y1="140" x2="440" y2="110"/>
+  <line class="edge" x1="270" y1="140" x2="440" y2="180"/>
+  <line class="edge" x1="270" y1="140" x2="440" y2="250"/>
+  <line class="edge" x1="270" y1="200" x2="440" y2="110"/>
+  <line class="edge" x1="270" y1="200" x2="440" y2="180"/>
+  <line class="edge" x1="270" y1="200" x2="440" y2="250"/>
+  <line class="edge" x1="270" y1="260" x2="440" y2="110"/>
+  <line class="edge" x1="270" y1="260" x2="440" y2="180"/>
+  <line class="edge" x1="270" y1="260" x2="440" y2="250"/>
+
+  <!-- Input nodes (3) -->
+  <circle class="node" cx="100" cy="110" r="16"/>
+  <circle class="node" cx="100" cy="180" r="16"/>
+  <circle class="node" cx="100" cy="250" r="16"/>
+
+  <!-- Hidden nodes (4) -->
+  <circle class="node" cx="270" cy="80"  r="16"/>
+  <circle class="node" cx="270" cy="140" r="16"/>
+  <circle class="node" cx="270" cy="200" r="16"/>
+  <circle class="node" cx="270" cy="260" r="16"/>
+
+  <!-- Output nodes (3) -->
+  <circle class="node" cx="440" cy="110" r="16"/>
+  <circle class="node" cx="440" cy="180" r="16"/>
+  <circle class="node" cx="440" cy="250" r="16"/>
+
+  <!-- Activation label between layers -->
+  <text class="activation" x="185" y="315">ReLU</text>
+
+  <!-- Layer labels -->
+  <text class="layer-label" x="100" y="305">input</text>
+  <text class="layer-label" x="270" y="305">hidden</text>
+  <text class="layer-label" x="440" y="305">output</text>
+
+  <!-- Param counts under each transition -->
+  <text class="param-label" x="185" y="338">Linear(3 → 4) = 16 params</text>
+  <text class="param-label" x="355" y="338">Linear(4 → 3) = 15 params</text>
+</svg>

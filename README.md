@@ -187,6 +187,70 @@ Boxes in red are kernels in this repo. The full data flow with shapes and stride
 
 ---
 
+## A neural network, end to end (toy example)
+
+Before getting to the gated-DeltaNet kernels, here's the smallest possible illustration of *what one inference call actually does*: a 3-layer MLP with **31 total parameters**, fed 3 input "tokens."
+
+<div align="center">
+
+<img src="assets/tiny_mlp.svg" alt="Tiny MLP architecture: 3-node input layer, 4-node hidden layer with ReLU, 3-node output layer; 16 + 15 = 31 parameters total" width="540">
+
+</div>
+
+### The model
+
+```python
+import torch
+import torch.nn as nn
+
+class TinyMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(3, 4)   # 3*4 + 4 = 16 params
+        self.fc2 = nn.Linear(4, 3)   # 4*3 + 3 = 15 params
+        #                              total   = 31 params
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        return self.fc2(x)
+
+model = TinyMLP().eval()
+```
+
+### One inference call over 3 tokens
+
+```python
+# Three "tokens" — three 3-dim input vectors stacked into a [3, 3] tensor.
+tokens = torch.tensor([
+    [ 1.0,  0.5, -0.3],   # token 0
+    [ 0.2,  0.8,  0.1],   # token 1
+    [-0.5,  0.3,  0.9],   # token 2
+])
+
+with torch.no_grad():
+    out = model(tokens)   # shape [3, 3]
+
+print(out)
+```
+
+Expected output (your numbers will differ because the weights are randomly initialized):
+
+```
+tensor([[ 0.142,  0.318, -0.077],
+        [ 0.205,  0.241, -0.012],
+        [ 0.103,  0.359, -0.158]])
+```
+
+That's the whole inference path: take 3 input vectors → multiply by 16-parameter `Linear(3 → 4)` → ReLU → multiply by 15-parameter `Linear(4 → 3)` → done. Three forward passes through 31 numbers, total work measured in nanoseconds.
+
+### How this scales up to the kernels in this repo
+
+The MLP above is a 31-parameter toy. A single **gated DeltaNet layer** running on the kernels in this repo (`chunk_fwd_h` + `chunk_fwd_o` + `recompute_w_u`) processes shapes like `(B=2, T=1024, H=3, K=64, V=64)` — **roughly 800,000 floats per layer per step**, with `tl.dot`-driven matmuls that run on MI300X Matrix Cores at MFMA throughput. The mathematical pattern is the same — *load tensors, multiply, apply gate, write back* — but the parameter count and arithmetic density are six orders of magnitude larger, and that's where every microsecond starts to matter.
+
+The forward pass for one such layer on PyTorch eager takes **~1.4 milliseconds**. On the Triton kernels in this repo, it takes **49 microseconds** — a 29× speedup on the same hardware, on the same fp32 dtype, doing the same math.
+
+---
+
 ## How it works (in plain English)
 
 If you're not deep in the gated-DeltaNet paper, the kernel names and tensor symbols look cryptic. Here's the whole thing in one page.
