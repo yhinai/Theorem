@@ -2,20 +2,13 @@
 
 # Theorem
 
-### AMD Instinct MI300X-optimized GPU kernels for transformer workloads
+### Triton kernels for Mamba-2 and gated DeltaNet on AMD MI300X
 
-Hand-written, autotune-swept Triton kernels for the four primitives that sit on
-the hot path of modern sub-quadratic sequence models — Mamba/Mamba-2's causal
-1-D conv and gated DeltaNet's three chunkwise operators — tuned end-to-end on
-real CDNA3 hardware.
+Autotune-swept on real CDNA3 silicon. **2.7–12.4×** over PyTorch eager, **2.3–4.1×** over `torch.compile`.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![GPU](https://img.shields.io/badge/GPU-AMD%20Instinct%20MI300X-ED1C24.svg)](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html)
-[![Arch](https://img.shields.io/badge/Arch-CDNA3%20%C2%B7%20gfx942-ED1C24.svg)](https://rocm.docs.amd.com/)
+[![GPU](https://img.shields.io/badge/AMD%20MI300X-CDNA3%20%C2%B7%20gfx942-ED1C24.svg)](https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html)
 [![ROCm](https://img.shields.io/badge/ROCm-7.x-ED1C24.svg)](https://rocm.docs.amd.com/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.5%2B%20(ROCm%206.2)-EE4C2C.svg)](https://pytorch.org/)
-[![Triton](https://img.shields.io/badge/Triton-3.1+%20AMD%20backend-1F1F1F.svg)](https://triton-lang.org/)
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/Status-Reproducible-2BBC8A.svg)](#reproducing-the-numbers)
 [![Bench](https://img.shields.io/badge/vs%20torch.compile-2.34%E2%80%934.10%C3%97-2BBC8A.svg)](docs/BENCHMARKS.md)
 
@@ -25,75 +18,13 @@ real CDNA3 hardware.
 
 ---
 
-## At a glance
-
-Geomean speedup vs PyTorch eager fp32 across each kernel's three benchmark shapes on a single AMD Instinct MI300X (gfx942). Per-shape breakdown and methodology in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
-
-<div align="center">
-
-| `causal_conv1d` | `chunk_fwd_h` | `chunk_fwd_o` | `recompute_w_u` |
-|:---:|:---:|:---:|:---:|
-| **2.83×** | **12.92×** | **4.39×** | **2.88×** |
-
-</div>
-
-The same kernels also outperform `torch.compile(mode="max-autotune-no-cudagraphs")` — which itself emits Triton-AMD code under the hood — by **2.46× to 3.62× geomean**. Every number on this page is reproducible by [`benchmarks/autotune.py`](benchmarks/autotune.py) + [`benchmarks/autotune_continuous.py`](benchmarks/autotune_continuous.py) + [`benchmarks/pytorch_baseline.py`](benchmarks/pytorch_baseline.py); raw CSVs are committed under [`results/`](results/).
-
----
-
 ## Demo
 
-<div align="center">
-
-<video src="https://github.com/yhinai/Theorem/raw/main/assets/demo.mp4" controls width="720">
-  Your browser does not display the video.
-  Download it:
-  <a href="assets/demo.mp4">assets/demo.mp4</a>.
-</video>
-
-[Watch · Download `assets/demo.mp4`](assets/demo.mp4)&nbsp;&nbsp;·&nbsp;&nbsp;[Open the slides](assets/theorem_slides.pdf)
-
-</div>
-
----
-
-## GPU at work
-
-<div align="center">
-
-<img src="assets/gpu_util.png" alt="AMD Instinct MI300X VF utilization during continuous autotune — GPU% spikes during each Triton compile + execute cycle, HBM stays at ~3 GiB / 192 GiB" width="780">
-
-</div>
-
-The screenshot above is from a live `nvtop`-style readout on the AMD Instinct MI300X VF during a `benchmarks/autotune_continuous.py` run.
-
-- **PCIe Gen 5 ×16, 2.1 GHz GPU clock, 210 / 750 W power draw** — the device is healthy and clocks are at design speed.
-- **GPU%** spikes follow each Triton kernel's compile-then-execute cycle inside the autotune sweep. Between spikes the GPU is idle while the host computes the next config.
-- **HBM utilization stays at ~3.1 GiB / 191.7 GiB (≈1.6%)** — exactly what you want from well-tuned kernels. The working sets fit in registers + LDS + L2; HBM only sees cold-start reads. Putting more pressure on HBM here would slow things down, not speed them up.
-
-The "memory underutilization" you see in monitoring is the *signature* of a kernel that doesn't waste round-trips to global memory.
-
----
-
-<details>
-<summary><b>Table of contents</b></summary>
-
-- [Why Theorem exists](#why-theorem-exists)
-- [Pipeline at a glance](#pipeline-at-a-glance)
-- [Compatibility](#compatibility)
-- [Quick start](#quick-start)
-- [Usage](#usage)
-- [Kernel inventory](#kernel-inventory)
-- [Optimization principles](#optimization-principles)
-- [Optimization journey](#optimization-journey--what-shipped-what-didnt)
-- [Reproducing the numbers](#reproducing-the-numbers)
-- [Repo layout](#repo-layout)
-- [Known limitations](#known-limitations)
-- [Acknowledgments](#acknowledgments)
-- [Citations](#citations)
-- [License](#license)
-
-</details>
+<p align="center">
+  <a href="assets/demo.mp4"><b>▶ Watch the demo (mp4)</b></a>
+  &nbsp;·&nbsp;
+  <a href="assets/theorem_slides.pdf"><b>Open the slides (pdf)</b></a>
+</p>
 
 ---
 
@@ -132,11 +63,81 @@ flowchart LR
     H -->|state h_c| O
     O --> OUT[output]
     WU -.->|w, u for backward| OUT
-    classDef k fill:#FFD7D7,stroke:#ED1C24,color:#400,stroke-width:1px
+    classDef k fill:#ED1C24,stroke:#ED1C24,color:#fff,stroke-width:1px
     class O,H,WU k
 ```
 
 Boxes in red are kernels in this repo. The full data flow with shapes and stride layouts is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+---
+
+## How it works (in plain English)
+
+If you're not deep in the gated-DeltaNet paper, the kernel names and tensor symbols look cryptic. Here's the whole thing in one page.
+
+### What each kernel produces
+
+| Kernel | Reads as | Plain-English description |
+|---|---|---|
+| `causal_conv1d` | depthwise causal 1-D conv | The Mamba-style **local mixer**. Slides a small filter over the time axis, never peeking into the future. |
+| `chunk_fwd_h` | chunkwise forward → produces **h** | Builds the **hidden state** — the recurrent memory of the layer, advanced one chunk at a time. |
+| `chunk_fwd_o` | chunkwise forward → produces **o** | Produces the **output** — combines local causal attention within the chunk with a read of the global state `h`. |
+| `recompute_w_u` | recompute **w** and **u** | Recomputes the **gated keys and values** that the other two kernels consume. Done on demand to save activation memory. |
+
+### Tensor glossary
+
+The single-letter names come from the linear-attention / WY-transform literature. Once you read them once, the math is just bookkeeping.
+
+| Symbol | Shape | What it is | Where it shows up |
+|---|---|---|---|
+| `q` | `[B, T, H, K]` | **queries** — what the current token is "asking for" | input to `chunk_fwd_o` |
+| `k` | `[B, T, H, K]` | **keys** — what the past tokens "answer with" | input to all three gated DeltaNet kernels |
+| `v` | `[B, T, H, V]` | **values** — what the past tokens "carry" | input to all three gated DeltaNet kernels |
+| `g` | `[B, T, H]` | **gate** — per-token forget signal (small negative; `exp(g) ≤ 1`) | input to all three; controls how much the past decays |
+| `β` | `[B, T, H]` | **beta** — per-token mix factor for the WY transform | input to `recompute_w_u` |
+| `h` | `[B, NT, H, K, V]` | **hidden state** — the recurrent memory, one slice per chunk | output of `chunk_fwd_h`, input to `chunk_fwd_o` |
+| `o` | `[B, T, H, V]` | **output** — what the layer returns | output of `chunk_fwd_o` |
+| `w`, `u` | `[B, T, H, K]`, `[B, T, H, V]` | **WY-transformed K and V** | output of `recompute_w_u`, input to the others |
+
+`B` = batch, `T` = time/sequence length, `H` = heads, `K` = key dim, `V` = value dim, `NT` = number of chunks (`T / chunk_size`).
+
+### The gate `g` is the most important variable
+
+Without `g`, the recurrent state would accumulate forever — old, irrelevant tokens would never get cleared. The gate is **selective forgetting**, the same role the *forget gate* plays in an LSTM:
+
+```
+S_{next chunk}  =  exp(g_chunk_total) · S_current_chunk  +  (new K^T · V update)
+                   └────────────────┘
+                      "decay" — drops in [0, 1]
+                      learned per-token
+```
+
+If `g` is very negative → `exp(g) ≈ 0` → forget fast.
+If `g` is near zero → `exp(g) ≈ 1` → remember everything.
+The model **learns** which tokens are worth holding on to.
+
+This is what makes gated DeltaNet a *selective* state-space model (like Mamba) rather than a fixed-decay linear attention. It's also why the kernels heavily rely on `exp2(x · log2e)` — AMD CDNA3 has a single-instruction `exp2`, and `g` gets exponentiated many times per chunk.
+
+### How the four kernels compose
+
+```
+β, k, v, g   ──→   recompute_w_u   ──→   w, u
+                                          │
+                                          ▼
+                  ┌─────────────────────────────────────────┐
+                  │                                         │
+                  │   chunk_fwd_h                           │
+                  │   (sequential per (batch, head):        │
+                  │    advance state h chunk-by-chunk)      │
+                  │                                         │
+                  └─────────────────────────────────────────┘
+                                   │
+                                   ▼
+q ────────────────────────────►   chunk_fwd_o   ──→   o (the layer's output)
+                                  (local attention + global state read)
+```
+
+In one paragraph: **`recompute_w_u` prepares the gated K and V; `chunk_fwd_h` rolls them into a recurrent state `h`; `chunk_fwd_o` mixes `h` with the queries to produce the layer's output `o`.** That's one forward step of a gated DeltaNet layer. `causal_conv1d` is independent — it's the local mixer in a Mamba block, fired once per layer.
 
 ---
 
@@ -211,77 +212,20 @@ The kernels do not require `generate_input` — you can pass your own live tenso
 
 ---
 
-## Why these four kernels?
-
-The four kernels in this repo aren't an arbitrary collection — they are the primitives that sit on the hot path of two actively-used sub-quadratic sequence-model families. Take any of them out and the model gets slower; replace any of them with a generic PyTorch implementation and the per-step latency more than doubles.
-
-- **`causal_conv1d`** — depthwise causal 1-D convolution. Used in **Mamba** and **Mamba-2** as the local mixer between SSM blocks. It is the single most-called primitive in those models per training step.
-- **`chunk_fwd_h`** — the inter-chunk state recurrence in **gated DeltaNet** ([arXiv:2412.06464](https://arxiv.org/abs/2412.06464), ICLR 2025). Sequentially advances the linear-attention state `S` across chunks: `S_{c+1} = G_c · S_c + K_c^T V_c`. Bottlenecks training because the chunk loop is inherently sequential per (batch, head).
-- **`chunk_fwd_o`** — the chunkwise output operator in gated DeltaNet. Combines per-chunk local causal attention `(Q K^T ⊙ M) V` with a read of the global state `Q · S_c`. Four matmuls per chunk; the most compute-dense of the four.
-- **`recompute_w_u`** — the WY-transform recompute that feeds chunk_fwd_h and chunk_fwd_o their gated K and V. Recomputed (rather than saved as activations) because it's cheaper to redo two GEMMs than to keep the intermediates around for backward.
-
-Together these four are a **representative cross-section of GPU kernel-optimization regimes**:
-
-| Kernel | Regime | Bottleneck on MI300X |
-|---|---|---|
-| `causal_conv1d` | Memory-bound elementwise | HBM bandwidth + launch overhead |
-| `chunk_fwd_h` | Sequential recurrence | Chunk-loop latency hiding |
-| `chunk_fwd_o` | Compute-dense (4 dots/chunk) | MFMA throughput + register pressure |
-| `recompute_w_u` | Two GEMMs/chunk | LDS pipeline depth + L2 reuse |
-
-Hitting all four well means we've exercised the full range of CDNA3 levers: wavefront-aware block sizing, MFMA tile selection, persistent kernels, L2 reordering, and deep `num_stages` pipelining. None of the techniques below would have surfaced from optimizing just one kernel.
-
----
-
 ## Kernel inventory
 
-<table>
-<thead>
-<tr>
-  <th align="left">Kernel</th>
-  <th align="left">What it does</th>
-  <th align="right">Reference (µs)</th>
-  <th align="right">Optimized (µs)</th>
-  <th align="right">Speedup</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-  <td><code>causal_conv1d</code></td>
-  <td>Depthwise 1-D causal convolution. Used in Mamba / Mamba-2-style architectures. Memory-bound. Continuous-autotune found <code>BLOCK_S=128, num_warps=16, num_stages=1</code> for the smaller bench shapes — bigger BLOCK_S amortizes more output per program once tile count exceeds CU count.</td>
-  <td align="right">95.4</td>
-  <td align="right">33.5</td>
-  <td align="right"><strong>2.83×</strong></td>
-</tr>
-<tr>
-  <td><code>chunk_fwd_h</code></td>
-  <td>Gated DeltaNet inter-chunk recurrence <code>S<sub>c+1</sub> = G<sub>c</sub>·S<sub>c</sub> + K<sub>c</sub><sup>T</sup>V<sub>c</sub></code>. State pinned in registers across the chunk loop; <code>tl.dot</code> mapped to Matrix Cores.</td>
-  <td align="right">484.4</td>
-  <td align="right">37.6</td>
-  <td align="right"><strong>12.92×</strong></td>
-</tr>
-<tr>
-  <td><code>chunk_fwd_o</code></td>
-  <td>Gated DeltaNet chunkwise output (local causal attention + global state). Biggest single tuning win: <code>num_warps=16→4</code> + <code>matrix_instr_nonkdim=16</code> picks the 16×16×4 fp32 MFMA shape that matches the 64×64 chunk geometry.</td>
-  <td align="right">165.3</td>
-  <td align="right">37.7</td>
-  <td align="right"><strong>4.39×</strong></td>
-</tr>
-<tr>
-  <td><code>recompute_w_u</code></td>
-  <td>Gated DeltaNet WY-transform recompute (two GEMMs per chunk). Persistent-blocked launch, L2 reordering. Continuous autotune found <code>num_stages=6</code> beats the prior <code>num_stages=2</code> by 36% on the smallest shape — deeper LDS pipelining hides HBM latency that hand-picked configs left exposed.</td>
-  <td align="right">110.4</td>
-  <td align="right">38.1</td>
-  <td align="right"><strong>2.88×</strong></td>
-</tr>
-</tbody>
-</table>
+| Kernel | What it does | Reference (µs) | Optimized (µs) | Speedup |
+|---|---|---:|---:|---:|
+| `causal_conv1d` | Depthwise 1-D causal convolution (Mamba / Mamba-2 local mixer). Memory-bound; small `(64×16)` tiles win because they expose more programs across the 304 CUs than fewer big tiles do. | 95.0 | 34.6 | **2.73×** |
+| `chunk_fwd_h` | Gated DeltaNet inter-chunk recurrence `S_{c+1} = G_c·S_c + K_cᵀ·V_c`. State pinned in registers across the chunk loop; `tl.dot` mapped to Matrix Cores. | 489.9 | 39.4 | **12.42×** |
+| `chunk_fwd_o` | Gated DeltaNet chunkwise output (local causal attention + global state). Biggest single tuning win: `num_warps=16→4` + `matrix_instr_nonkdim=16` picks the 16×16×4 fp32 MFMA shape matching the 64×64 chunk geometry. | 192.7 | 42.7 | **4.51×** |
+| `recompute_w_u` | Gated DeltaNet WY-transform recompute (two GEMMs per chunk). Persistent-blocked launch, L2 reordering, autotuned `num_warps=4`: 4 × 64-lane wavefronts = 256 threads/CTA — exactly right for the 64×64 MFMA tile. | 124.4 | 42.1 | **2.96×** |
 
 Full per-shape tables with min / p50 / mean and the comparison against `torch.compile`: [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
 
 ---
 
-## Optimization principles
+## Optimizations
 
 Four patterns repeat across every kernel — written up once in [`docs/OPTIMIZATIONS.md`](docs/OPTIMIZATIONS.md), summarized here.
 
@@ -290,23 +234,16 @@ Four patterns repeat across every kernel — written up once in [`docs/OPTIMIZAT
 - **MFMA tile shape (`matrix_instr_nonkdim`).** The AMD backend's MFMA selector. For the 64×64 chunk geometry the 16×16×4 fp32 shape (`nonkdim=16`) beats the 32×32×2 default — picked at autotune time.
 - **Per-shape configuration tuning.** Configs live in `SHAPE_CONFIGS` dicts at module load time. No runtime autotune on the hot path — autotune is a build-time concern, swept by [`benchmarks/autotune.py`](benchmarks/autotune.py).
 
----
+<details>
+<summary><b>Optimization journey — three rounds of autotune-driven work</b></summary>
 
-## Optimization journey
+| Round | Approach | Outcome |
+|---|---|---|
+| 1 | Sweep `BLOCK_*` × `num_warps` × `num_stages` for the shape-aware kernels | `causal_conv1d` +30–39% per shape (small tiles beat big ones on a 304-CU chip) |
+| 2 | Refactor `recompute_w_u` to a dict-keyed `SHAPE_CONFIGS` then sweep | +17–26% per shape (`num_warps=4` beats hand-picked 8) |
+| 3 | Add `matrix_instr_nonkdim` to the matmul kernel sweeps | `chunk_fwd_o` +47% on the larger shapes (16×16×4 MFMA over 32×32×2) |
 
-Three rounds of autotune-driven work on the MI300X — each one driven by an insight that came from measuring real CDNA3 hardware rather than porting NVIDIA intuitions.
-
-<table>
-<thead>
-<tr><th>Round</th><th align="left">Approach</th><th align="left">Outcome</th></tr>
-</thead>
-<tbody>
-<tr><td>1</td><td>Sweep <code>BLOCK_*</code> × <code>num_warps</code> × <code>num_stages</code> for the shape-aware kernels</td><td><code>causal_conv1d</code> +30-39% per shape (small tiles beat big ones on a 304-CU chip)</td></tr>
-<tr><td>2</td><td>Refactor <code>recompute_w_u</code> to a dict-keyed <code>SHAPE_CONFIGS</code> then sweep</td><td>+17-26% per shape (<code>num_warps=4</code> beats hand-picked 8)</td></tr>
-<tr><td>3</td><td>Add <code>matrix_instr_nonkdim</code> to the matmul kernel sweeps</td><td><code>chunk_fwd_o</code> +47% on the larger shapes (16×16×4 MFMA over 32×32×2)</td></tr>
-<tr><td>4</td><td>Continuous hill-climb with random restarts; extend <code>num_stages</code> to {1..8}</td><td><code>recompute_w_u</code> smallest shape −36% (<code>num_stages</code> 2 → 6 deepens the LDS pipeline); <code>causal_conv1d</code> two bench shapes another −8% via <code>BLOCK_S=128, num_warps=16</code></td></tr>
-</tbody>
-</table>
+</details>
 
 ---
 
@@ -338,35 +275,14 @@ Methodology, timing protocol (5 warmup + 50 timed iters via `torch.cuda.Event` p
 
 ## Repo layout
 
-```text
-Theorem/
-├── kernels/                       4 kernel modules (kernel.py + reference.py + task.yml + README.md)
-│   ├── causal_conv1d/
-│   ├── chunk_fwd_h/
-│   ├── chunk_fwd_o/
-│   └── recompute_w_u/
-├── benchmarks/
-│   ├── autotune.py                per-shape Triton config sweep
-│   ├── pytorch_baseline.py        Triton vs eager vs torch.compile
-│   └── apply_best_configs.py      writes best configs back into kernel.py
-├── eval.py                        single-kernel correctness + benchmark
-├── run_sweep.py                   cross-kernel correctness + benchmark sweep
-├── utils.py                       allclose / device probes / lazy import
-├── scripts/
-│   ├── run_amd.py                 smoke-test all 4 kernels
-│   ├── monitor_gpu.sh             rocm-smi telemetry to CSV
-│   ├── cpu_reference.py           NumPy oracle for causal_conv1d
-│   └── setup_env.sh               one-shot ROCm venv + torch install
-├── docs/
-│   ├── ARCHITECTURE.md            CDNA3 mental model + repo shape
-│   ├── OPTIMIZATIONS.md           per-kernel optimization deep-dive
-│   └── BENCHMARKS.md              methodology + per-shape result tables
-├── results/                       raw CSVs from runs (committed)
-├── assets/
-│   ├── demo.mp4                   the demo video at the top of this README
-│   └── theorem_slides.pdf         the slide deck
-└── .github/workflows/ci.yml       syntax + task.yml validation
-```
+- **`kernels/`** — four kernel modules (`causal_conv1d`, `chunk_fwd_h`, `chunk_fwd_o`, `recompute_w_u`), each with `kernel.py` + `reference.py` + `task.yml` + README.
+- **`benchmarks/`** — `autotune.py` (per-shape Triton config sweep), `pytorch_baseline.py` (Triton vs eager vs `torch.compile`), `apply_best_configs.py`.
+- **`scripts/`** — `run_amd.py` smoke test, `setup_env.sh` one-shot ROCm venv, `monitor_gpu.sh` rocm-smi telemetry.
+- **`docs/`** — `ARCHITECTURE.md`, `OPTIMIZATIONS.md`, `BENCHMARKS.md`, `REFERENCES.md`.
+- **`results/`** — raw CSVs (committed for auditability).
+- **`assets/`** — demo video + slide deck.
+
+Full file-level tree: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
@@ -383,36 +299,11 @@ Theorem/
 ## Acknowledgments
 
 - The **AMD ROCm and Triton-AMD-backend teams** for landing the upstream Triton AMD backend and keeping it current.
-- The **gated DeltaNet authors** (Yang, Wang, Zhang, Lin, Sun, Yu, Tian) for the [arXiv:2412.06464](https://arxiv.org/abs/2412.06464) paper that this repo's inter-chunk recurrence is built around.
+- The **gated DeltaNet authors** ([arXiv:2412.06464](https://arxiv.org/abs/2412.06464)) for the chunkwise recurrence this repo is built around.
 - The **Mamba / Mamba-2** authors for putting depthwise causal 1-D conv on the critical path of every modern SSM.
-- The **PyTorch team** for keeping the `cuda` namespace stable on ROCm — the source-compat shim that makes everything in this repo "just work" on AMD.
+- The **PyTorch team** for keeping the `cuda` namespace stable on ROCm.
 
----
-
-## Citations
-
-```bibtex
-@misc{theorem2026,
-  title  = {Theorem: AMD MI300X-optimized GPU kernels for transformer workloads},
-  author = {yhinai},
-  year   = {2026},
-  url    = {https://github.com/yhinai/Theorem}
-}
-
-@article{yang2024gateddelta,
-  title   = {Gated Delta Networks: Improving Mamba2 with Delta Rule},
-  author  = {Yang, Songlin and Wang, Bailin and Zhang, Yikang and Lin, Yu
-             and Sun, Yongqi and Yu, Yu and Tian, Yuandong},
-  journal = {arXiv preprint arXiv:2412.06464},
-  year    = {2024},
-  url     = {https://arxiv.org/abs/2412.06464}
-}
-```
-
-External references:
-- AMD MI300X architecture brief — <https://www.amd.com/en/products/accelerators/instinct/mi300/mi300x.html>
-- ROCm documentation — <https://rocm.docs.amd.com/>
-- Triton AMD backend — <https://triton-lang.org/main/dialects/amdgpu.html>
+To cite this work, use GitHub's "Cite this repository" button (powered by [`CITATION.cff`](CITATION.cff)). Full bibliography and external references: [`docs/REFERENCES.md`](docs/REFERENCES.md).
 
 ---
 
