@@ -47,7 +47,7 @@ from benchmarks.autotune import (  # type: ignore
 # ----------------------------------------------------------------------------
 
 def time_kernel(custom_fn, data, warmup: int = 5, iters: int = 25) -> float:
-    """Min-of-iters timing in microseconds."""
+    """Min-of-iters timing in microseconds (legacy short-window timer)."""
     for _ in range(warmup):
         custom_fn(data)
     torch.cuda.synchronize()
@@ -63,6 +63,57 @@ def time_kernel(custom_fn, data, warmup: int = 5, iters: int = 25) -> float:
         if us < min_us:
             min_us = us
     return min_us
+
+
+def time_kernel_saturated(custom_fn, data, seconds: float = 2.0,
+                          inner_iters: int = 200, warmup: int = 5) -> float:
+    """Hammer the kernel for `seconds` to keep the GPU pegged near 100%.
+
+    Loops in tight blocks of `inner_iters` calls each, measuring per-call
+    latency from a single Event pair around the block (amortizing launch
+    overhead). Returns the minimum per-call latency observed across all
+    blocks. The GPU stays continuously busy for the full window because
+    each block is ~50ms+ of work and the host issues the next block
+    immediately on sync.
+    """
+    for _ in range(warmup):
+        custom_fn(data)
+    torch.cuda.synchronize()
+
+    min_us = float("inf")
+    t_end = time.time() + seconds
+    while time.time() < t_end:
+        s = torch.cuda.Event(enable_timing=True)
+        e = torch.cuda.Event(enable_timing=True)
+        s.record()
+        for _ in range(inner_iters):
+            custom_fn(data)
+        e.record()
+        torch.cuda.synchronize()
+        per_call_us = s.elapsed_time(e) * 1000.0 / inner_iters
+        if per_call_us < min_us:
+            min_us = per_call_us
+    return min_us
+
+
+# ----------------------------------------------------------------------------
+# Cached kernel module access — avoids the per-sample re-import cost.
+# ----------------------------------------------------------------------------
+
+_KERNEL_MOD_CACHE: dict[str, Any] = {}
+
+
+def get_kernel_mod(kernel: str):
+    """Import the kernel.<name>.kernel submodule once; reuse for all samples.
+
+    SHAPE_CONFIGS is a plain dict on the module; mutating it in place is
+    cheap and doesn't invalidate Triton's source-AST-keyed JIT cache.
+    The launch kwargs (num_warps, num_stages, matrix_instr_nonkdim) are
+    launch-time metadata, so they don't trigger a recompile either.
+    """
+    if kernel not in _KERNEL_MOD_CACHE:
+        _KERNEL_MOD_CACHE[kernel] = import_kernel_pkg(kernel)
+    return _KERNEL_MOD_CACHE[kernel]
 
 
 # ----------------------------------------------------------------------------
@@ -130,6 +181,14 @@ def main() -> int:
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--print-every", type=float, default=60.0,
                    help="seconds between progress summaries")
+    p.add_argument("--saturate-seconds", type=float, default=2.0,
+                   help="hammer each config for this many seconds to keep the "
+                        "GPU pegged near 100%% (default 2.0). Set to 0 to use "
+                        "the legacy 25-iter short timer instead.")
+    p.add_argument("--inner-iters", type=int, default=200,
+                   help="kernel launches per Event block in hammer mode (default 200). "
+                        "Higher = better launch-overhead amortization; lower = "
+                        "finer-grained latency sampling.")
     args = p.parse_args()
 
     if args.seed is not None:
@@ -213,9 +272,16 @@ def main() -> int:
             status = "ok"
             error = ""
             try:
-                mod = import_kernel_pkg(kernel)
-                grid_spec.apply_fn(mod, cfg, key)
-                t = time_kernel(mod.custom_kernel, data)
+                mod = get_kernel_mod(kernel)   # cached: no per-sample reimport
+                grid_spec.apply_fn(mod, cfg, key)   # in-place SHAPE_CONFIGS mutation
+                if args.saturate_seconds > 0:
+                    t = time_kernel_saturated(
+                        mod.custom_kernel, data,
+                        seconds=args.saturate_seconds,
+                        inner_iters=args.inner_iters,
+                    )
+                else:
+                    t = time_kernel(mod.custom_kernel, data)
             except Exception as ex:
                 status = "fail"
                 error = f"{type(ex).__name__}: {str(ex)[:160]}"
