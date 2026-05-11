@@ -394,6 +394,11 @@ python benchmarks/autotune.py --kernels all --mode bench
 # Triton vs PyTorch eager vs torch.compile (writes results/baseline_compare.csv):
 python benchmarks/pytorch_baseline.py
 
+# Long-running random + hill-climb sweep (leave overnight). Writes every
+# (kernel, shape, config, latency) sample to a JSONL log and the running
+# best per (kernel, shape) to a summary CSV. SIGINT cleanly flushes.
+python benchmarks/long_sweep.py --hours 6 --strategy mixed
+
 # GPU telemetry during a run:
 bash scripts/monitor_gpu.sh /tmp/gpu_telemetry.csv &
 ```
